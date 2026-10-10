@@ -1,0 +1,39 @@
+{
+  "name": "private-meet",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "convex dev --start 'vite --host 127.0.0.1'",
+    "dev:vite": "vite --host 127.0.0.1",
+    "dev:convex": "convex dev",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "deploy": "npx @convex-dev/static-hosting deploy",
+    "deploy:static": "npx @convex-dev/static-hosting upload --build",
+    "test": "tsx --test tests/*.test.js tests/*.test.ts",
+    "typecheck": "tsc --noEmit -p convex/tsconfig.json",
+    "setup:auth": "node scripts/setup-local-auth.mjs"
+  },
+  "dependencies": {
+    "@auth/core": "^0.41.1",
+    "@convex-dev/auth": "0.0.95",
+    "@convex-dev/static-hosting": "^0.2.1",
+    "@noble/curves": "^1.9.1",
+    "@noble/hashes": "^1.8.0",
+    "convex": "1.45.0",
+    "privatepoker-p2p": "file:../privatepoker-p2p",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "react-router-dom": "^7.13.2"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.2.2",
+    "@types/node": "^22.20.5",
+    "@vitejs/plugin-react": "^4.7.0",
+    "tailwindcss": "^4.2.2",
+    "tsx": "^4.23.15",
+    "typescript": "~5.6.3",
+    "vite": "^6.4.3"
+  }
+}

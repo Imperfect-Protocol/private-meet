@@ -1,0 +1,45 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: dark;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: #0b1020;
+  color: #e2e8f0;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 15% 0%, rgba(244, 63, 94, 0.12), transparent 40%),
+    radial-gradient(circle at 85% 100%, rgba(251, 191, 36, 0.08), transparent 45%),
+    #0b1020;
+}
+
+@utility panel {
+  @apply rounded-2xl border border-slate-700/60 bg-slate-900/80 shadow-2xl backdrop-blur;
+}
+
+@utility btn {
+  @apply inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-40;
+}
+
+@utility btn-primary {
+  @apply btn bg-rose-500 text-white hover:bg-rose-400;
+}
+
+@utility btn-ghost {
+  @apply btn border border-slate-600 text-slate-200 hover:bg-slate-800;
+}
+
+@utility field {
+  @apply w-full rounded-lg border border-slate-600 bg-slate-950/70 px-3 py-2 text-sm text-white outline-none focus:border-rose-400;
+}
+
+@utility label {
+  @apply mb-1 block text-xs font-semibold tracking-wider text-slate-400 uppercase;
+}
+
+.hatched {
+  background-image: repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0 6px, transparent 6px 12px);
+}
