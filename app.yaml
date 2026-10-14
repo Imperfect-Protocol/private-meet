@@ -1,0 +1,4 @@
+name: private-meet
+owner: sadhbh-c0d3
+package: .
+kind: wasmer.io/App.v0

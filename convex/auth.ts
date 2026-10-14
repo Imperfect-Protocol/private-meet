@@ -7,6 +7,14 @@ import { makeFunctionReference } from "convex/server";
 import { sendEmail } from "./model/resend";
 import type { MutationCtx } from "./_generated/server";
 
+function siteUrl(): string {
+  return (process.env.MEET_SITE_URL ?? "http://127.0.0.1:5173").replace(/\/$/, "");
+}
+
+function passwordResetTemplateId(): string {
+    return (process.env.MEET_PASSWORD_RESET_TEMPLATE_ID  ?? "password-reset");
+}
+
 const PasswordReset = Email({
   id: "password-reset",
   name: "Password Reset",
@@ -14,9 +22,15 @@ const PasswordReset = Email({
   async sendVerificationRequest({ identifier, url }) {
     await sendEmail({
       to: identifier,
-      subject: "Reset your Private Meet password",
-      html: `<p>Reset your Private Meet password:</p><p><a href="${url}">${url}</a></p>`,
-      text: `Reset your Private Meet password: ${url}`,
+
+      template: {
+        id: passwordResetTemplateId(),
+        variables: {
+          url,
+          privacyUrl: `${siteUrl()}/privacy`,
+          termsUrl: `${siteUrl()}/terms`,
+        },
+      },
     });
   },
 });

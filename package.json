@@ -7,7 +7,8 @@
     "dev": "convex dev --start 'vite --host 127.0.0.1'",
     "dev:vite": "vite --host 127.0.0.1",
     "dev:convex": "convex dev",
-    "build": "vite build",
+    "build": "vite build && vite build --ssr server/standalone-entry.js --outDir dist/server --emptyOutDir false",
+    "build-wasmer": "npm run build && cp wasmer.toml app.yaml ./dist",
     "preview": "vite preview --host 127.0.0.1",
     "deploy": "npx @convex-dev/static-hosting deploy",
     "deploy:static": "npx @convex-dev/static-hosting upload --build",
@@ -34,6 +35,7 @@
     "tailwindcss": "^4.2.2",
     "tsx": "^4.23.15",
     "typescript": "~5.6.3",
-    "vite": "^6.4.3"
+    "vite": "^6.4.3",
+    "vite-plugin-standalone": "^2.0.0-alpha.5"
   }
 }

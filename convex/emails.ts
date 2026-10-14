@@ -15,12 +15,12 @@ type InviteEmail = {
   otherEmail: string;
 };
 
-function mailto_address_override() {
-  return process.env.MAILTO_ADDRESS_OVERRIDE;
+function siteUrl(): string {
+  return (process.env.MEET_SITE_URL ?? "http://127.0.0.1:5173").replace(/\/$/, "");
 }
 
-function siteUrl(): string {
-  return (process.env.SITE_URL ?? "http://127.0.0.1:5173").replace(/\/$/, "");
+function invitationTemplateId(): string {
+    return (process.env.MEET_INVITATION_TEMPLATE_ID ?? "meeting-invitation");
 }
 
 function formatWhen(startsAt: number, durationMinutes: number, timeZone: string): string {
@@ -105,41 +105,94 @@ export const markInvite = internalMutation({
 /** Emails both parties an Accept/Decline invite with the meeting link and an .ics attachment. */
 export const sendInvites = internalAction({
   args: { meetingId: v.id("meetings") },
+
   handler: async (ctx, args) => {
-    const data = await ctx.runQuery(internal.emails.inviteData, { meetingId: args.meetingId });
+    const data = await ctx.runQuery(
+      internal.emails.inviteData,
+      { meetingId: args.meetingId }
+    );
+
     if (!data) return;
+
     const meeting = data.meeting;
+    const templateId = invitationTemplateId();
+
+    if (!templateId) {
+      throw new Error("Missing RESEND_INVITATION_TEMPLATE_ID");
+    }
 
     for (const invite of data.emails) {
-      const inviteLink = `${siteUrl()}/invite/${invite.token}`;
-      const meetLink = `${siteUrl()}/meet/${meeting._id}?k=${invite.token}`;
-      const when = formatWhen(meeting.startsAt, meeting.durationMinutes, invite.timeZone);
-      const ics = icsFile(meeting._id, meeting.title, meeting.startsAt, meeting.durationMinutes, meetLink);
-      const mailto = mailto_address_override();
       try {
-        if (!invite.email) throw new Error(`No email address for ${invite.role}`);
+        if (!invite.email) {
+          throw new Error(`No email address for ${invite.role}`);
+        }
+
+        const inviteLink = `${siteUrl()}/invite/${invite.token}`;
+
+        const meetLink =
+          `${siteUrl()}/meet/${meeting._id}?k=${invite.token}`;
+
+        const when = formatWhen(
+          meeting.startsAt,
+          meeting.durationMinutes,
+          invite.timeZone
+        );
+
+        const ics = icsFile(
+          meeting._id,
+          meeting.title,
+          meeting.startsAt,
+          meeting.durationMinutes,
+          meetLink
+        );
+
         await sendEmail({
-          to: mailto ?? invite.email,
-          subject: `Private Meet with ${invite.otherName}: ${when}`,
-          text: [
-            `You have a Private Meet with ${invite.otherName}.`,
-            `When: ${when}`,
-            `Accept or decline: ${inviteLink}`,
-            `Join the table: ${meetLink}`,
-          ].join("\n"),
-          html: [
-            `<p>You have a <strong>Private Meet</strong> with ${escapeHtml(invite.otherName)} (${escapeHtml(invite.otherEmail)}).</p>`,
-            `<p><strong>When:</strong> ${when}</p>`,
-            `<p><a href="${inviteLink}">Accept or decline the invite</a></p>`,
-            `<p>Join the table: <a href="${meetLink}">${meetLink}</a></p>`,
-          ].join(""),
-          attachments: [{ filename: "private-meet.ics", content: base64Utf8(ics) }],
+          to: invite.email,
+          reply_to: invite.otherEmail,
+
+          template: {
+            id: templateId ?? "",
+            variables: {
+              hostName: invite.otherName,
+              meetingWhen: when,
+              responseUrl: inviteLink,
+              meetingUrl: meetLink,
+              termsUrl: `${siteUrl()}/terms`,
+              privacyUrl: `${siteUrl()}/privacy`,
+            },
+          },
+
+          attachments: [
+            {
+              filename: "private-meet.ics",
+              content: base64Utf8(ics),
+            },
+          ],
         });
-        await ctx.runMutation(internal.emails.markInvite, { inviteId: invite.inviteId, state: "sent" });
+
+        await ctx.runMutation(
+          internal.emails.markInvite,
+          {
+            inviteId: invite.inviteId,
+            state: "sent",
+          }
+        );
+
       } catch (error) {
-        console.error(`[Private Meet] invite email failed for ${invite.role}`, error);
-        await ctx.runMutation(internal.emails.markInvite, { inviteId: invite.inviteId, state: "failed" });
+        console.error(
+          `[Private Meet] invite email failed for ${invite.role}`,
+          error
+        );
+
+        await ctx.runMutation(
+          internal.emails.markInvite,
+          {
+            inviteId: invite.inviteId,
+            state: "failed",
+          }
+        );
       }
     }
   },
 });
+
