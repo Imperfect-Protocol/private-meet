@@ -15,6 +15,10 @@ type InviteEmail = {
   otherEmail: string;
 };
 
+function mainSiteUrl(): string {
+  return (process.env.MEET_MAIN_SITE_URL ?? "http://127.0.0.1:3000").replace(/\/$/, "");
+}
+
 function siteUrl(): string {
   return (process.env.MEET_SITE_URL ?? "http://127.0.0.1:5173").replace(/\/$/, "");
 }
@@ -157,8 +161,8 @@ export const sendInvites = internalAction({
               meetingWhen: when,
               responseUrl: inviteLink,
               meetingUrl: meetLink,
-              termsUrl: `${siteUrl()}/terms`,
-              privacyUrl: `${siteUrl()}/privacy`,
+              termsUrl: `${mainSiteUrl()}/terms`,
+              privacyUrl: `${mainSiteUrl()}/privacy`,
             },
           },
 
