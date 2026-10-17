@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useAuthActions } from '@convex-dev/auth/react';
 import { useConvexAuth } from 'convex/react';
-import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Brand, Splash } from '../components/Splash.jsx';
 
-const MODE = Object.freeze({ SignIn: 'signIn', SignUp: 'signUp', Forgot: 'forgot', Reset: 'reset' });
+const MODE = Object.freeze({ SignIn: 'signIn', Forgot: 'forgot', Reset: 'reset' });
 
 function authErrorText(error) {
   const message = error instanceof Error ? error.message : String(error);
+  if (message.includes('Account creation is by request only')) return 'Account creation is by request only. Use Create account to request access.';
   if (message.includes('InvalidSecret') || message.includes('Invalid credentials')) return 'Wrong email or password.';
   if (/Account .+ already exists/.test(message)) return 'That account already exists. Sign in instead.';
   if (message.includes('InvalidAccountId')) return 'No password account for that email.';
@@ -29,7 +30,7 @@ export function SignInPage() {
   const resetCode = searchParams.get('code') ?? '';
   const isResetRoute = location.pathname === '/reset-password';
   const [mode, setMode] = useState(isResetRoute ? (resetCode ? MODE.Reset : MODE.Forgot) : MODE.SignIn);
-  const [form, setForm] = useState({ username: '', email: searchParams.get('email') ?? '', password: '' });
+  const [form, setForm] = useState({ email: searchParams.get('email') ?? '', password: '' });
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
   const [isBusy, setIsBusy] = useState(false);
@@ -61,9 +62,6 @@ export function SignInPage() {
     if (mode === MODE.SignIn) {
       run(() => authActions.signIn('password', { flow: 'signIn', email: form.email, password: form.password }));
     }
-    if (mode === MODE.SignUp) {
-      run(() => authActions.signIn('password', { flow: 'signUp', email: form.email, password: form.password, name: form.username }));
-    }
     if (mode === MODE.Forgot) {
       run(
         () => authActions.signIn('password', {
@@ -84,11 +82,10 @@ export function SignInPage() {
 
   const titles = {
     [MODE.SignIn]: 'Sign in',
-    [MODE.SignUp]: 'Create your account',
     [MODE.Forgot]: 'Forgot password',
     [MODE.Reset]: 'Choose a new password',
   };
-  const canSubmit = form.email && (mode === MODE.Forgot || form.password) && (mode !== MODE.SignUp || form.username.trim());
+  const canSubmit = form.email && (mode === MODE.Forgot || form.password);
 
   return (
     <main className="grid min-h-screen place-items-center p-6">
@@ -97,7 +94,7 @@ export function SignInPage() {
         <h1 className="mt-6 text-2xl font-bold text-white">{titles[mode]}</h1>
         <p className="mt-1 text-sm text-slate-400">Meet over a private game of poker. Peer-to-peer video, no middleman.</p>
 
-        {mode === MODE.SignIn || mode === MODE.SignUp ? (
+        {mode === MODE.SignIn ? (
           <>
             <button
               className="btn-ghost mt-6 w-full"
@@ -113,12 +110,6 @@ export function SignInPage() {
         ) : <div className="mt-6" />}
 
         <form className="space-y-4" onSubmit={submit}>
-          {mode === MODE.SignUp ? (
-            <label className="block">
-              <span className="label">Username</span>
-              <input className="field" autoComplete="username" value={form.username} onChange={update('username')} placeholder="ada_lovelace" />
-            </label>
-          ) : null}
           <label className="block">
             <span className="label">{mode === MODE.SignIn ? 'Username or email' : 'Email'}</span>
             <input className="field" autoComplete={mode === MODE.SignIn ? 'username' : 'email'} type={mode === MODE.SignIn ? 'text' : 'email'} value={form.email} onChange={update('email')} placeholder={mode === MODE.SignIn ? 'username or you@example.com' : 'you@example.com'} />
@@ -137,14 +128,14 @@ export function SignInPage() {
             </label>
           ) : null}
           <button className="btn-primary w-full" disabled={!canSubmit || isBusy} type="submit">
-            {mode === MODE.SignIn ? 'Sign in' : mode === MODE.SignUp ? 'Create account' : mode === MODE.Forgot ? 'Send reset link' : 'Reset password'}
+            {mode === MODE.SignIn ? 'Sign in' : mode === MODE.Forgot ? 'Send reset link' : 'Reset password'}
           </button>
         </form>
 
         <div className="mt-5 flex justify-between text-sm">
           {mode === MODE.SignIn ? (
             <>
-              <button className="text-rose-300 hover:underline" type="button" onClick={() => setMode(MODE.SignUp)}>Create account</button>
+              <Link className="text-rose-300 hover:underline" to="/request-access">Create account</Link>
               <button className="text-slate-400 hover:underline" type="button" onClick={() => setMode(MODE.Forgot)}>Forgot password?</button>
             </>
           ) : (

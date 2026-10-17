@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as accessRequests from "../accessRequests.js";
 import type * as auth from "../auth.js";
 import type * as booking from "../booking.js";
 import type * as emails from "../emails.js";
@@ -15,6 +16,8 @@ import type * as hosts from "../hosts.js";
 import type * as http from "../http.js";
 import type * as invites from "../invites.js";
 import type * as meetings from "../meetings.js";
+import type * as model_accessRequest from "../model/accessRequest.js";
+import type * as model_accountAccess from "../model/accountAccess.js";
 import type * as model_resend from "../model/resend.js";
 import type * as model_slots from "../model/slots.js";
 import type * as model_tokens from "../model/tokens.js";
@@ -28,6 +31,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  accessRequests: typeof accessRequests;
   auth: typeof auth;
   booking: typeof booking;
   emails: typeof emails;
@@ -35,6 +39,8 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   invites: typeof invites;
   meetings: typeof meetings;
+  "model/accessRequest": typeof model_accessRequest;
+  "model/accountAccess": typeof model_accountAccess;
   "model/resend": typeof model_resend;
   "model/slots": typeof model_slots;
   "model/tokens": typeof model_tokens;

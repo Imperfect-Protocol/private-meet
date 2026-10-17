@@ -22,6 +22,13 @@ export const meetingStatus = v.union(
 export default defineSchema({
   ...authTables,
 
+  accessRequests: defineTable({
+    displayName: v.string(),
+    email: v.string(),
+    message: v.string(),
+    status: v.literal("pending"),
+  }).index("by_email", ["email"]),
+
   usernames: defineTable({
     username: v.string(),
     email: v.string(),

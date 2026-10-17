@@ -12,6 +12,8 @@
     "preview": "vite preview --host 127.0.0.1",
     "deploy": "npx @convex-dev/static-hosting deploy",
     "deploy:static": "npx @convex-dev/static-hosting upload --build",
+    "deploy-convex": "npx convex deploy",
+    "deploy-wasmer": "cd dist && wasmer deploy",
     "test": "tsx --test tests/*.test.js tests/*.test.ts",
     "typecheck": "tsc --noEmit -p convex/tsconfig.json",
     "setup:auth": "node scripts/setup-local-auth.mjs"

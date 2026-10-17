@@ -42,7 +42,9 @@ npm run dev:vite
 
 ## Sign-in and email
 
-Password accounts accept a unique username (3–30 letters, numbers or underscores), email and an eight-character-or-longer password at signup. Sign-in accepts the username or email. Password resets use the email address. GitHub OAuth is also configured, but requires your own OAuth application credentials.
+GitHub users can create an account directly with Continue with GitHub. Account creation without GitHub is by request only. The Create account link opens `/request-access`, where visitors submit a proposed display name, email and message. Submissions are saved in Convex's `accessRequests` table for review; they do not create accounts or send notification emails. Review them in the Convex dashboard. The form rejects invalid or oversized submissions and repeated requests from the same email within one minute.
+
+Existing accounts can still sign in with their username/email and password, or their linked GitHub account. Password resets use the email address. The backend allows new users only through the configured GitHub OAuth provider and rejects direct password sign-up. There is no public approval or password-account provisioning endpoint.
 
 Set these variables on this project's Convex deployment:
 

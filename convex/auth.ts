@@ -5,6 +5,7 @@ import { Password } from "@convex-dev/auth/providers/Password";
 import { convexAuth } from "@convex-dev/auth/server";
 import { makeFunctionReference } from "convex/server";
 import { sendEmail } from "./model/resend";
+import { assertAccountCreationAllowed, assertPasswordFlowAllowed } from "./model/accountAccess";
 import type { MutationCtx } from "./_generated/server";
 
 function siteUrl(): string {
@@ -53,13 +54,9 @@ const usernamePassword = {
   options: {
     ...passwordOptions,
     authorize: async (params: Parameters<ConvexCredentialsUserConfig["authorize"]>[0], ctx: Parameters<ConvexCredentialsUserConfig["authorize"]>[1]) => {
+      assertPasswordFlowAllowed(params.flow);
       let email = String(params.email ?? "").trim().toLowerCase();
-      if (params.flow === "signUp") {
-        if (!/^[a-z0-9_]{3,30}$/.test(String(params.name ?? "").trim().toLowerCase())) {
-          throw new Error("Username must be 3–30 letters, numbers or underscores");
-        }
-        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error("A valid email is required");
-      } else if (!email.includes("@")) {
+      if (!email.includes("@")) {
         const resolved: string | null = await ctx.runQuery(makeFunctionReference<"query">("usernames:emailForUsername"), { username: email });
         if (!resolved) throw new Error("Invalid credentials");
         email = resolved;
@@ -76,6 +73,9 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
   ],
   callbacks: {
     async afterUserCreatedOrUpdated(ctx, args) {
+      // The provider comes from the server's auth configuration, not client parameters.
+      // Rejected account creation rolls back the surrounding auth mutation.
+      assertAccountCreationAllowed(args.existingUserId, args.provider.id, args.provider.type);
       if (args.type !== "credentials") return;
       const username = String(args.profile.name ?? "").trim().toLowerCase();
       const email = String(args.profile.email ?? "").trim().toLowerCase();

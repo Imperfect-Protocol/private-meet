@@ -8,6 +8,7 @@ import { BookingPage } from './pages/BookingPage.jsx';
 import { CalendarPage } from './pages/CalendarPage.jsx';
 import { InvitePage } from './pages/InvitePage.jsx';
 import { SignInPage } from './pages/SignInPage.jsx';
+import { RequestAccessPage } from './pages/RequestAccessPage.jsx';
 import { Splash } from './components/Splash.jsx';
 
 const MeetPage = lazy(() => import('./pages/MeetPage.jsx').then((module) => ({ default: module.MeetPage })));
@@ -17,6 +18,7 @@ export default function App() {
     <Suspense fallback={<Splash label="Loading" />}>
     <Routes>
       <Route path="/sign-in" element={<SignInPage />} />
+      <Route path="/request-access" element={<RequestAccessPage />} />
       <Route path="/reset-password" element={<SignInPage />} />
       <Route path="/" element={<RequireHost><CalendarPage /></RequireHost>} />
       <Route path="/book/:slug" element={<BookingPage />} />
