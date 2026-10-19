@@ -1,37 +1,39 @@
 import { ChatLog } from './ChatLog.js';
 import { ChessSession } from '../chess/ChessSession.ts';
+import { GameKind } from './games.js';
 import { HeadsUpMatch } from './HeadsUpMatch.js';
 import { MediaSession } from './MediaSession.js';
 import { LinkState, MeetLink } from './MeetLink.js';
-import { PeerKey, SessionIdentity } from './SessionIdentity.js';
+import { SessionIdentity } from './SessionIdentity.js';
 
 const MAX_CONSOLE_LINES = 400;
 const CHAT = 'chat';
 
 /**
- * Everything one tab owns at a meeting table: session identity, the P2P link, the poker match,
- * chat and media. React subscribes to it; no protocol logic lives in hooks.
+ * Everything one tab owns at a meeting table: session identity, the P2P link, the game (poker or
+ * chess), chat and media. React subscribes to it; no protocol logic lives in hooks.
  */
 export class MeetSession {
-  constructor({ meetingId, seat, kind = 'poker' }) {
-    this.seat = seat;
+  constructor(options) {
+    this.seat = options.seat;
+    this.kind = options.kind === GameKind.Chess ? GameKind.Chess : GameKind.Poker;
     this.identity = SessionIdentity.generate();
     this.listeners = new Set();
     this.version = 0;
     this.cachedView = null;
     this.consoleLines = [];
     this.chat = new ChatLog();
-    this.link = new MeetLink({ identity: this.identity, meetingId, onEvent: (event) => this.handleLink(event) });
-    this.kind = kind;
+    this.link = new MeetLink({ identity: this.identity, meetingId: options.meetingId, onEvent: (event) => this.handleLink(event) });
     this.match = this.createMatch();
     this.media = new MediaSession({ link: this.link, onChange: () => this.changed() });
     this.media.start();
   }
 
+  /** The link signs and verifies every message, so the games only keep their replicas in step. */
   createMatch() {
     const send = (message) => this.link.send(message);
     const onChange = () => this.changed();
-    if (this.kind === 'chess') return new ChessSession({ seat: this.seat, identity: this.identity, send, onChange, log: (line) => this.print('Chess', line) });
+    if (this.kind === GameKind.Chess) return new ChessSession({ seat: this.seat, send, onChange, log: (line) => this.print('Chess', line) });
     return new HeadsUpMatch({ seat: this.seat, identity: this.identity, send, onChange, log: (line) => this.print('Game', line) });
   }
 
@@ -41,9 +43,7 @@ export class MeetSession {
   }
 
   setPeer(peer) {
-    if (!peer) return;
-    if (this.kind === 'chess') this.match.setPeerKey(new PeerKey(peer.publicKey));
-    this.link.connect(peer);
+    if (peer) this.link.connect(peer);
   }
 
   handleLink(event) {

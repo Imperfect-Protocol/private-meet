@@ -92,7 +92,7 @@ export function SignInPage() {
       <section className="panel w-full max-w-sm p-8">
         <Brand />
         <h1 className="mt-6 text-2xl font-bold text-white">{titles[mode]}</h1>
-        <p className="mt-1 text-sm text-slate-400">Meet over a private game of poker. Peer-to-peer video, no middleman.</p>
+        <p className="mt-1 text-sm text-slate-400">Meet over a private game of poker or chess. Peer-to-peer video, no middleman.</p>
 
         {mode === MODE.SignIn ? (
           <>

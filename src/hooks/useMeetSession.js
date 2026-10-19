@@ -11,21 +11,21 @@ export function useMeetSession(meetingId, token, table) {
   const announcePeer = useMutation(api.meetings.announcePeer);
   const [session, setSession] = useState(null);
   const [error, setError] = useState('');
-  const seat = table?.seat;
-  const peerAddress = table?.peer?.peerAddress;
-  const publicKey = table?.peer?.publicKey;
+  // Primitive fields as effect dependencies: Convex hands out a new table object on every update.
+  const seat = table.seat;
+  const game = table.game;
+  const peerAddress = table.peer?.peerAddress;
+  const publicKey = table.peer?.publicKey;
 
   useEffect(() => {
-    if (seat === undefined) return undefined;
-    const kind = table?.game === 'chess' ? 'chess' : 'poker';
-    const next = new MeetSession({ meetingId, seat, kind });
+    const next = new MeetSession({ meetingId, seat, kind: game });
     let cancelled = false;
     setError('');
     announcePeer({ token, ...next.announcement() })
       .then(() => { if (!cancelled) setSession(next); })
       .catch((reason) => { if (!cancelled) setError(reason.message); });
     return () => { cancelled = true; next.close(); };
-  }, [meetingId, token, seat, table?.game, announcePeer]);
+  }, [meetingId, token, seat, game, announcePeer]);
 
   useEffect(() => {
     if (session && peerAddress && publicKey) session.setPeer({ peerAddress, publicKey });

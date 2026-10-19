@@ -1,4 +1,5 @@
 import { Modal } from '../Modal.jsx';
+import { gameLabel } from '../../lib/meet/games.js';
 import { ViewerTime } from '../../lib/time/ViewerTime.js';
 
 const INVITE_LABEL = {
@@ -8,8 +9,6 @@ const INVITE_LABEL = {
   accepted: 'Accepted',
   declined: 'Declined',
 };
-
-const GAME_LABEL = { poker: 'Poker', chess: 'Chess' };
 
 export function meetingLink(meetingId, token) {
   return `${window.location.origin}/meet/${meetingId}?k=${token}`;
@@ -24,7 +23,7 @@ export function MeetingPopup({ meeting, onClose }) {
           {ViewerTime.fullDate(meeting.startsAt)}<br />
           {ViewerTime.range(meeting.startsAt, meeting.durationMinutes)} · {meeting.durationMinutes} min
         </Row>
-        <Row label="Game">{GAME_LABEL[meeting.game] ?? 'Poker'}</Row>
+        <Row label="Game">{gameLabel(meeting.game)}</Row>
         <Row label="Guest">{meeting.guestName}</Row>
         <Row label="Email"><a className="text-rose-300 hover:underline" href={`mailto:${meeting.guestEmail}`}>{meeting.guestEmail}</a></Row>
         <Row label="Status">

@@ -1,89 +1,111 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as Chess from '../src/lib/chess/Chess';
-import { boardCharacters, squareCoordinates, squareName } from '../src/lib/chess/ChessPosition';
-import { ChessSession, type ChessMessage } from '../src/lib/chess/ChessSession';
-import { SessionIdentity, PeerKey } from '../src/lib/meet/SessionIdentity.js';
+import { ChessPhase, ChessSession, Resignation } from '../src/lib/chess/ChessSession';
+import { boardLetters, promotionAt, squareAt, squareName } from '../src/lib/chess/Notation';
+import { WireCodec } from '../src/lib/meet/WireCodec.js';
 
-function boardWith(...placements: (readonly [string, Chess.Color, Chess.Piece])[]): Chess.Board {
-  const rows: Chess.MaybeColorPiece[][] = Array.from({ length: 8 }, () => Array(8).fill(null));
-  for (const placement of placements) {
-    const square = squareCoordinates(placement[0]);
-    assert.ok(square);
-    rows[square[0]][square[1]] = [placement[1], placement[2]];
-  }
-  return rows;
+const FEN_PIECES: Record<string, Chess.Piece> = {
+  k: Chess.King, q: Chess.Queen, r: Chess.Rook, b: Chess.Bishop, n: Chess.Knight, p: Chess.Pawn,
+};
+
+/** Board from the piece placement field of a FEN string. */
+function fenBoard(placement: string): Chess.Board {
+  return placement.split('/').map((rank) => [...rank].flatMap((symbol): Chess.MaybeColorPiece[] => (/\d/.test(symbol)
+    ? Array(Number(symbol)).fill(null)
+    : [[symbol === symbol.toUpperCase() ? Chess.White : Chess.Black, FEN_PIECES[symbol.toLowerCase()]]])));
 }
 
-function play(game: Chess.Game, from: string, to: string) {
-  const source = squareCoordinates(from);
-  const destination = squareCoordinates(to);
-  assert.ok(source && destination);
-  return game.play(source[0], source[1])(destination[0], destination[1]);
+/** One rank as text, '.' for vacant squares. */
+function rankText(board: Chess.Board, rank: number): string {
+  return boardLetters(board)[8 - rank].map((letter) => letter ?? '.').join('');
 }
 
-test('Scala board layout, colors, pieces and initial Game accessors are preserved', () => {
-  const game = new Chess.Game();
+function play(game: Chess.Game, from: string, to: string, promotion?: Chess.Piece) {
+  const source = squareAt(from) as Chess.Square;
+  const target = squareAt(to) as Chess.Square;
+  return game.play(source[0], source[1])(target[0], target[1], promotion);
+}
+
+function playAll(game: Chess.Game, moves: string): void {
+  for (const move of moves.split(' ')) assert.equal(play(game, move.slice(0, 2), move.slice(2, 4)), null, move);
+}
+
+function perft(color: Chess.Color, history: Chess.History, depth: number): number {
+  const moves = Chess.legalMoves(color)(history);
+  if (depth === 1) return moves.length;
+  return moves.reduce((nodes, move) => {
+    const board = Chess.makeMove(move.from[0], move.from[1])(move.to[0], move.to[1], move.promotion)(color)(history) as Chess.Board;
+    return nodes + perft(Chess.oppositeColor(color), [...history, board], depth - 1);
+  }, 0);
+}
+
+test('the board, colors, pieces and Game keep the Scala layout and accessors', () => {
+  assert.deepEqual([8, 7, 6, 5, 4, 3, 2, 1].map((rank) => rankText(Chess.newBoard, rank)), [
+    'rnbqkbnr', 'pppppppp', '........', '........', '........', '........', 'PPPPPPPP', 'RNBQKBNR',
+  ]);
   assert.deepEqual(Chess.White.initialRanks, [7, 6]);
   assert.deepEqual(Chess.Black.initialRanks, [0, 1]);
-  assert.deepEqual(game.recent, Chess.newBoard);
-  assert.deepEqual(game.recent[0][4], [Chess.Black, Chess.King]);
-  assert.deepEqual(game.recent[7][4], [Chess.White, Chess.King]);
+  assert.equal(new Set(Chess.Knight.validMoves.map(String)).size, 8, 'Scala repeated some Knight vectors and missed others');
+  const game = new Chess.Game();
+  assert.equal(game.recent, Chess.newBoard);
   assert.equal(game.turn, Chess.White);
   assert.equal(game.previousTurn, null);
   assert.equal(game.lastOutcome, Chess.NextPlayer);
+  assert.equal(game.ply, 0);
   assert.equal(game.apply((board) => board[6][4]?.[1]), Chess.Pawn);
-  assert.equal(Chess.legalMoves(game.turn)(game.recent).length, 20);
-  assert.equal(new Set(Chess.Knight.validMoves.map(String)).size, 8);
+  assert.equal(game.legalMoves().length, 20);
 });
 
-test('curried vector and path helpers match Scala coordinate conventions', () => {
+test('vector and path helpers follow the Scala conventions', () => {
   assert.deepEqual(Chess.moveVector(6, 4)(4, 4)(Chess.White), [2, 0]);
   assert.deepEqual(Chess.moveVector(1, 4)(3, 4)(Chess.Black), [2, 0]);
   assert.deepEqual(Chess.normalizeVector([-5, 3]), [-1, 1]);
   assert.equal(Chess.oppositeColor(Chess.White), Chess.Black);
   assert.deepEqual(Chess.nextSquare(6, 4)(Chess.White)([2, 0]), [4, 4]);
+  assert.deepEqual(Chess.nextSquare(1, 4)(Chess.Black)([2, 0]), [3, 4]);
   assert.deepEqual(Chess.nextVector([1, 2])([3, -1]), [4, 1]);
   assert.deepEqual(Chess.distanceVector(6, 4)(4, 4), [-2, 0]);
   assert.deepEqual(Chess.createPath(7, 0)(4, 3), [[7, 0], [6, 1], [5, 2], [4, 3]]);
   assert.equal(Chess.isPathBlocked(7, 0)(4, 3)(Chess.newBoard), true);
-  assert.deepEqual(Chess.findPathBlocker(7, 0)(Chess.White)([1, 0])(Chess.newBoard), [[Chess.White, Chess.Pawn], [6, 0]]);
+  assert.equal(Chess.isPathBlocked(6, 4)(4, 4)(Chess.newBoard), false);
+  assert.deepEqual(Chess.findPathBlocker(4, 4)(Chess.White)([1, 0])(Chess.newBoard), [[Chess.Black, Chess.Pawn], [1, 4]]);
   assert.deepEqual(Chess.findPathBlocker(7, 0)(Chess.White)([1, -1])(Chess.newBoard), [[Chess.White, Chess.Pawn], [6, 1]]);
   assert.equal(Chess.findPathBlocker(7, 0)(Chess.White)([1, 1])(Chess.newBoard), null);
   assert.equal(Chess.isValidSquare([7, 7]), true);
   assert.equal(Chess.isValidSquare(8, 0), false);
-  assert.equal(Chess.isValidSquare(1.5, 0), false);
+  assert.equal(Chess.isValidSquare(0, 1.5), false);
   assert.equal(Chess.isSquareVacant(Chess.newBoard)([4, 4]), true);
   assert.equal(Chess.isOccupied(6, 4)(Chess.White)(Chess.newBoard), true);
+  assert.equal(Chess.isOccupied(6, 4)(Chess.Black)(Chess.newBoard), false);
 });
 
-test('Game.play returns errors as data and undo restores board, turn and outcome', () => {
+test('Game.play returns invalid moves as values, and undo restores board, turn and outcome', () => {
   const game = new Chess.Game();
-  const initial = game.recent;
+  assert.equal(game.play(9, 0)(0, 0), Chess.InvalidLocation);
+  assert.equal(game.play(4, 4)(3, 4), Chess.NoPiece);
+  assert.equal(game.play(1, 4)(3, 4), Chess.NoPlayerTurn);
+  assert.equal(game.play(7, 0)(6, 0), Chess.AlreadyOccupied);
+  assert.equal(game.play(7, 0)(5, 0), Chess.MoveBlocked);
+  assert.equal(game.play(6, 0)(3, 0), Chess.NoMove);
+  assert.equal(game.ply, 0, 'invalid moves leave no history');
   assert.equal(game.play(6, 4)(4, 4), null);
-  const first = game.recent;
-  assert.equal(first[6][4], null);
-  assert.deepEqual(first[4][4], [Chess.White, Chess.Pawn]);
-  assert.equal(initial[6][4]?.[1], Chess.Pawn, 'earlier boards are immutable');
+  assert.equal(Chess.newBoard[6][4]?.[1], Chess.Pawn, 'boards never change in place');
   assert.equal(game.turn, Chess.Black);
   assert.equal(game.previousTurn, Chess.White);
+  const afterFirst = game.recent;
   assert.equal(game.play(1, 4)(3, 4), null);
-  assert.equal(game.previousTurn, Chess.Black);
-  assert.equal(game.play(9, 0)(0, 0), Chess.InvalidLocation);
-  assert.equal(game.play(6, 0)(3, 0), Chess.NoMove);
-  assert.equal(game.ply, 2, 'rejected moves do not add history');
   game.undo();
-  assert.equal(game.recent, first);
+  assert.equal(game.recent, afterFirst);
   assert.equal(game.turn, Chess.Black);
   game.undo();
   game.undo();
-  assert.equal(game.recent, initial);
-  assert.equal(game.previousTurn, null);
+  assert.equal(game.recent, Chess.newBoard);
+  assert.equal(game.turn, Chess.White);
   assert.equal(game.lastOutcome, Chess.NextPlayer);
-  assert.throws(() => (game.recent as Chess.MaybeColorPiece[][])[0][0] = null, TypeError);
 });
 
-test('Scala Main example accepts the two opening knight moves and rejects its blocked bishop', () => {
+test('the Scala Main example plays the same way', () => {
   const game = new Chess.Game();
   assert.equal(game.play(7, 6)(5, 5), null);
   assert.equal(game.play(0, 6)(2, 5), null);
@@ -92,274 +114,367 @@ test('Scala Main example accepts the two opening knight moves and rejects its bl
   assert.equal(game.play(0, 7)(0, 2), Chess.AlreadyOccupied);
 });
 
-test('movement helpers preserve immutable result boards and reject illegal geometry', () => {
-  const board = boardWith(['e1', Chess.White, Chess.King], ['e8', Chess.Black, Chess.King], ['d4', Chess.White, Chess.Queen]);
-  assert.equal(Chess.movePieceVariable(4, 3)(2, 4)(Chess.White, Chess.Queen)(board).ok, false);
-  assert.equal(Chess.movePieceFixed(4, 3)(2, 4)(Chess.White, Chess.Knight)(board).ok, true);
-  assert.equal(Chess.makeMove(3, 3)(2, 3)(Chess.White)(board).ok, false);
-  assert.equal(Chess.movePiece(7, 4)(7, 4)(Chess.White, Chess.King)(board).ok, false);
-});
-
-test('pawns cannot jump into an occupied destination and promote on straight moves and captures', () => {
-  const blocked = boardWith(['e1', Chess.White, Chess.King], ['e8', Chess.Black, Chess.King],
-    ['a2', Chess.White, Chess.Pawn], ['a4', Chess.Black, Chess.Knight]);
-  assert.deepEqual(Chess.movePawn(6, 0)(4, 0)(Chess.White)(blocked), { ok: false, error: Chess.MoveBlocked });
-  for (const target of ['a8', 'b8']) {
-    const game = new Chess.Game(boardWith(['e1', Chess.White, Chess.King], ['h8', Chess.Black, Chess.King],
-      ['a7', Chess.White, Chess.Pawn], ['b8', Chess.Black, Chess.Rook]));
-    assert.equal(play(game, 'a7', target), null);
-    const square = squareCoordinates(target)!;
-    assert.equal(game.recent[square[0]][square[1]]?.[1], Chess.Queen);
-  }
-});
-
-test('threat helpers include knights, pawns, sliding pieces and adjacent kings', () => {
-  const knight = boardWith(['e1', Chess.White, Chess.King], ['h8', Chess.Black, Chess.King], ['f3', Chess.Black, Chess.Knight]);
-  assert.equal(Chess.isKnightCheckAt(7, 4)(Chess.White)(knight), true);
-  const pawn = boardWith(['e1', Chess.White, Chess.King], ['h8', Chess.Black, Chess.King], ['d2', Chess.Black, Chess.Pawn]);
-  assert.equal(Chess.isPawnCheckAt(7, 4)(Chess.White)(pawn), true);
-  const rook = boardWith(['e1', Chess.White, Chess.King], ['h8', Chess.Black, Chess.King], ['e7', Chess.Black, Chess.Rook]);
-  assert.equal(Chess.isVariableRangeCheckAt(7, 4)(Chess.White)(rook), true);
-  const kings = boardWith(['e1', Chess.White, Chess.King], ['e2', Chess.Black, Chess.King]);
-  assert.equal(Chess.isCheckAt(7, 4)(Chess.White)(kings), true);
-});
-
-test('a pinned piece cannot expose its king; capture of the checker is a legal escape', () => {
-  const game = new Chess.Game(boardWith(['e1', Chess.White, Chess.King], ['a8', Chess.Black, Chess.King],
-    ['e8', Chess.Black, Chess.Rook], ['e2', Chess.White, Chess.Rook]));
-  assert.equal(play(game, 'e2', 'd2'), Chess.KingInCheck);
-  const checked = new Chess.Game(boardWith(['e1', Chess.White, Chess.King], ['a1', Chess.Black, Chess.Rook], ['h8', Chess.Black, Chess.King]));
-  assert.equal(checked.lastOutcome, Chess.Check, 'the king can escape the rook check');
-  const interpose = new Chess.Game(boardWith(['a1', Chess.White, Chess.King], ['h8', Chess.Black, Chess.King],
-    ['a8', Chess.Black, Chess.Rook], ['b8', Chess.Black, Chess.Rook], ['c2', Chess.White, Chess.Bishop]));
-  assert.equal(interpose.lastOutcome, Chess.Check);
-  assert.equal(play(interpose, 'c2', 'a4'), null, 'bishop can block the checking rook');
-  const capture = new Chess.Game(boardWith(['e1', Chess.White, Chess.King], ['h8', Chess.Black, Chess.King],
-    ['e2', Chess.Black, Chess.Rook], ['d1', Chess.White, Chess.Bishop]));
-  assert.equal(capture.lastOutcome, Chess.Check);
-  assert.equal(play(capture, 'd1', 'e2'), null, 'bishop can capture the checking rook');
-});
-
-test('castling moves both pieces, cannot cross check, and undo restores rights', () => {
-  const game = Chess.Game.fromFEN('r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1');
-  const before = game.fen;
-  assert.equal(play(game, 'e1', 'g1'), null);
-  assert.deepEqual(game.recent[7][6], [Chess.White, Chess.King]);
-  assert.deepEqual(game.recent[7][5], [Chess.White, Chess.Rook]);
-  game.undo();
-  assert.equal(game.fen, before);
-  assert.equal(play(game, 'e1', 'c1'), null);
-  assert.deepEqual(game.recent[7][3], [Chess.White, Chess.Rook]);
-  const attacked = Chess.Game.fromFEN('r3k2r/8/8/8/2b5/8/8/R3K2R w KQkq - 0 1');
-  assert.notEqual(play(attacked, 'e1', 'g1'), null, 'cannot castle through attacked f1');
-  const moved = Chess.Game.fromFEN('r3k2r/8/8/8/8/8/8/R3K2R w - - 0 1');
-  assert.notEqual(play(moved, 'e1', 'g1'), null, 'piece placement alone does not restore castling rights');
-});
-
-test('en passant removes the captured pawn and expires after another move', () => {
-  const game = Chess.Game.fromFEN('4k3/5p2/8/4P3/8/8/8/4K3 b - - 0 1');
-  assert.equal(play(game, 'f7', 'f5'), null);
-  const before = game.fen;
-  assert.equal(play(game, 'e5', 'f6'), null);
-  assert.equal(game.recent[3][5], null);
-  assert.deepEqual(game.recent[2][5], [Chess.White, Chess.Pawn]);
-  game.undo();
-  assert.equal(game.fen, before);
-  assert.equal(play(game, 'e1', 'd1'), null);
+test('pawns step onto vacant squares, double step only from the start, and kill only diagonally', () => {
+  const start = fenBoard('4k3/8/8/8/n7/8/P1P5/4K3');
+  assert.equal(Chess.movePawn(6, 0)(4, 0)(Chess.White)(start), Chess.MoveBlocked, 'Scala let a double step land on a piece');
+  const game = new Chess.Game(start);
+  assert.equal(play(game, 'a2', 'b3'), Chess.NoPawnMove, 'a Pawn kills only an opponent piece');
+  assert.equal(play(game, 'c2', 'c5'), Chess.NoMove);
+  assert.equal(play(game, 'c2', 'c4'), null);
   assert.equal(play(game, 'e8', 'd8'), null);
-  assert.notEqual(play(game, 'e5', 'f6'), null);
+  assert.equal(play(game, 'c4', 'c6'), Chess.NoPawnMove, 'a double step only from the initial rank');
+  const facing = new Chess.Game(fenBoard('4k3/8/8/3pp3/4P3/8/8/4K3'));
+  assert.equal(play(facing, 'e4', 'e5'), Chess.MoveBlocked);
+  assert.equal(play(facing, 'e4', 'd5'), null);
 });
 
-test('promotion supports queen, rook, bishop and knight without changing the curried API', () => {
-  for (const promotion of ['q', 'r', 'b', 'n'] as const) {
-    const game = Chess.Game.fromFEN('7k/P7/8/8/8/8/8/4K3 w - - 0 1');
-    assert.equal(game.play(1, 0)(0, 0, promotion), null);
-    assert.equal(game.recent[0][0]?.[1].code, promotion.toUpperCase());
-    game.undo();
-    assert.equal(game.recent[1][0]?.[1], Chess.Pawn);
+test('a Pawn promotes to any of four pieces, on a step or a kill (Scala: only on a step, always a Queen)', () => {
+  const position = '1r5k/P7/8/8/8/8/8/4K3';
+  for (const piece of Chess.promotions) {
+    const game = new Chess.Game(fenBoard(position));
+    assert.equal(play(game, 'a7', 'a8', piece), null);
+    assert.equal(game.recent[0][0]?.[1], piece);
   }
+  const kill = new Chess.Game(fenBoard(position));
+  assert.equal(play(kill, 'a7', 'b8', Chess.Knight), null);
+  assert.deepEqual(kill.recent[0][1], [Chess.White, Chess.Knight]);
+  assert.equal(play(new Chess.Game(fenBoard(position)), 'a7', 'a8', Chess.King), Chess.NoPawnMove);
 });
 
-test('repetition, fifty-move and insufficient-material draws are detected', () => {
-  const repetition = new Chess.Game();
-  for (let repeat = 0; repeat < 2; repeat += 1) {
-    for (const move of [['g1', 'f3'], ['g8', 'f6'], ['f3', 'g1'], ['f6', 'g8']]) {
-      assert.equal(play(repetition, move[0], move[1]), null);
-    }
-  }
-  assert.equal(repetition.lastOutcome, Chess.Draw);
-  assert.equal(repetition.drawReason, 'repetition');
-  repetition.undo();
-  assert.equal(repetition.lastOutcome, Chess.NextPlayer);
-  const fifty = Chess.Game.fromFEN('7k/8/8/8/8/8/8/R3K3 w - - 99 1');
-  assert.equal(play(fifty, 'a1', 'a2'), null);
-  assert.equal(fifty.lastOutcome, Chess.Draw);
-  assert.equal(fifty.drawReason, 'fifty-move');
-  const material = Chess.Game.fromFEN('7k/8/8/8/8/8/8/4K3 w - - 0 1');
-  assert.equal(material.lastOutcome, Chess.Draw);
-  assert.equal(material.drawReason, 'insufficient-material');
+test('sliding pieces move along straight lines only (Scala let a Bishop move like a Knight)', () => {
+  const board = fenBoard('4k3/8/8/8/3B4/8/8/4K3');
+  assert.equal(Chess.movePieceVariable(4, 3)(2, 4)(Chess.White, Chess.Bishop)(board), Chess.NoMove);
+  assert.equal(Chess.isInvalid(Chess.movePieceVariable(4, 3)(1, 6)(Chess.White, Chess.Bishop)(board)), false);
 });
 
-test('Fool’s mate reports the opponent checkmate; undo restores play', () => {
-  const game = new Chess.Game();
-  for (const move of [['f2', 'f3'], ['e7', 'e5'], ['g2', 'g4'], ['d8', 'h4']]) assert.equal(play(game, move[0], move[1]), null);
-  assert.equal(game.lastOutcome, Chess.CheckMate);
-  assert.equal(game.turn, Chess.White);
-  assert.equal(play(game, 'e2', 'e4'), Chess.GameOver);
-  game.undo();
-  assert.equal(game.turn, Chess.Black);
-  assert.equal(game.lastOutcome, Chess.NextPlayer);
+test('no move may leave the King in check, and the Kings never stand side by side', () => {
+  const pinned = new Chess.Game(fenBoard('4r2k/8/8/8/8/8/4R3/4K3'));
+  assert.equal(play(pinned, 'e2', 'd2'), Chess.KingInCheck);
+  assert.equal(play(pinned, 'e2', 'e8'), null, 'the pinned Rook may kill along the pin');
+  const kings = new Chess.Game(fenBoard('8/8/8/8/8/4k3/8/R3K3'));
+  assert.equal(play(kings, 'e1', 'e2'), Chess.KingInCheck, 'Scala let the Kings stand side by side');
+  const retreat = new Chess.Game(fenBoard('4r2k/8/8/8/4K3/8/8/8'));
+  assert.equal(retreat.lastOutcome, Chess.Check);
+  assert.equal(play(retreat, 'e4', 'e3'), Chess.KingInCheck, 'Scala took a step along the checking line for an escape');
+  assert.equal(play(retreat, 'e4', 'd4'), null);
 });
 
-test('stalemate and algebraic adapters use the same rank/file layout', () => {
-  const game = new Chess.Game(boardWith(['h8', Chess.Black, Chess.King], ['f7', Chess.White, Chess.King], ['g6', Chess.White, Chess.Queen]), Chess.Black);
+test('checkmate looks at every reply: a block or a kill saves the King (Scala looked only at its escapes)', () => {
+  assert.equal(new Chess.Game(fenBoard('6k1/8/8/8/8/8/5PPP/r5K1')).lastOutcome, Chess.CheckMate);
+  const block = new Chess.Game(fenBoard('6k1/8/8/8/8/8/3B1PPP/r5K1'));
+  assert.equal(block.lastOutcome, Chess.Check);
+  assert.equal(play(block, 'd2', 'e1'), null);
+  const kill = new Chess.Game(fenBoard('6k1/R7/8/8/8/8/5PPP/r5K1'));
+  assert.equal(kill.lastOutcome, Chess.Check);
+  assert.equal(play(kill, 'a7', 'a1'), null);
+  const fool = new Chess.Game();
+  playAll(fool, 'f2f3 e7e5 g2g4 d8h4');
+  assert.equal(fool.lastOutcome, Chess.CheckMate);
+  assert.equal(play(fool, 'e2', 'e4'), Chess.GameOver);
+  fool.undo();
+  assert.equal(fool.lastOutcome, Chess.NextPlayer);
+  assert.equal(fool.turn, Chess.Black);
+});
+
+test('stalemate: no legal move and no check', () => {
+  const game = new Chess.Game(fenBoard('7k/5K2/6Q1/8/8/8/8/8'), Chess.Black);
   assert.equal(game.lastOutcome, Chess.Stalemate);
-  assert.equal(squareName([0, 0]), 'a8');
-  assert.deepEqual(squareCoordinates('e2'), [6, 4]);
-  assert.equal(squareCoordinates('z0'), null);
-  assert.equal(boardCharacters(Chess.newBoard)[7][4], 'K');
+  assert.deepEqual(game.legalMoves(), []);
+  assert.equal(play(game, 'h8', 'g8'), Chess.GameOver);
 });
 
-function pairedSessions() {
-  const identities = [SessionIdentity.generate(), SessionIdentity.generate()];
-  const queues: ChessMessage[][] = [[], []];
-  const sessions = ([0, 1] as const).map((seat) => new ChessSession({
-    seat, identity: identities[seat], peerKey: new PeerKey(identities[1 - seat].publicKeyHex),
-    send: (message) => { queues[1 - seat].push(structuredClone(message)); return true; },
-  }));
+test('castling on both sides, never out of or through check, never after the King or Rook moved', () => {
+  const both = 'r3k2r/8/8/8/8/8/8/R3K2R';
+  const game = new Chess.Game(fenBoard(both));
+  assert.equal(play(game, 'e1', 'g1'), null);
+  assert.equal(rankText(game.recent, 1), 'R....RK.');
+  game.undo();
+  assert.equal(play(game, 'e1', 'c1'), null);
+  assert.equal(rankText(game.recent, 1), '..KR...R');
+  assert.equal(play(game, 'e8', 'g8'), null);
+  assert.equal(rankText(game.recent, 8), 'r....rk.');
+  const attacked = 'r3k2r/8/8/8/2b5/8/8/R3K2R';
+  assert.equal(play(new Chess.Game(fenBoard(attacked)), 'e1', 'g1'), Chess.KingInCheck, 'the Bishop watches f1');
+  assert.equal(play(new Chess.Game(fenBoard(attacked)), 'e1', 'c1'), null);
+  assert.equal(play(new Chess.Game(fenBoard('4k3/8/8/8/4r3/8/8/R3K2R')), 'e1', 'g1'), Chess.KingInCheck, 'not out of check');
+  assert.equal(play(new Chess.Game(), 'e1', 'g1'), Chess.MoveBlocked);
+  const moved = new Chess.Game(fenBoard(both));
+  playAll(moved, 'h1h2 a8a7 h2h1 a7a8');
+  assert.equal(play(moved, 'e1', 'g1'), Chess.NoCastling, 'the Rook went away and back');
+  assert.equal(play(moved, 'e1', 'c1'), null);
+  assert.equal(play(moved, 'e8', 'c8'), Chess.NoCastling);
+  assert.equal(play(moved, 'e8', 'g8'), null);
+});
+
+test('en passant kills the passing Pawn, right after its double step only', () => {
+  const game = new Chess.Game(fenBoard('4k3/5p2/8/4P3/8/8/8/4K3'), Chess.Black);
+  assert.equal(play(game, 'f7', 'f5'), null);
+  assert.equal(play(game, 'e5', 'f6'), null);
+  assert.equal(rankText(game.recent, 5), '........');
+  assert.equal(rankText(game.recent, 6), '.....P..');
+  game.undo();
+  playAll(game, 'e1d1 e8d8');
+  assert.equal(play(game, 'e5', 'f6'), Chess.NoPawnMove, 'too late');
+});
+
+test('draws: insufficient material, fifty quiet moves, and the third repetition with the same castling rights', () => {
+  assert.equal(new Chess.Game(fenBoard('4k3/8/8/8/8/8/8/4K3')).lastOutcome, Chess.InsufficientMaterial);
+  assert.equal(new Chess.Game(fenBoard('4k3/8/8/8/8/8/8/2N1K3')).lastOutcome, Chess.InsufficientMaterial);
+  assert.equal(new Chess.Game(fenBoard('4kb2/8/8/8/8/8/8/2B1K3')).lastOutcome, Chess.InsufficientMaterial, 'Bishops on one color');
+  assert.equal(new Chess.Game(fenBoard('2b1k3/8/8/8/8/8/8/2B1K3')).lastOutcome, Chess.NextPlayer, 'Bishops on both colors');
+
+  const quiet = fenBoard('4k3/8/8/8/8/8/8/R3K3');
+  assert.equal(Chess.quietPlies(Array(100).fill(quiet)), 99);
+  assert.equal(Chess.outcome(Chess.White)(Array(101).fill(quiet)), Chess.FiftyMoves);
+  assert.equal(Chess.quietPlies([...Array(60).fill(quiet), fenBoard('4k3/8/8/8/8/8/8/4K3')]), 0, 'a kill starts the count again');
+
+  const knights = new Chess.Game();
+  playAll(knights, 'g1f3 g8f6 f3g1 f6g8');
+  assert.equal(knights.lastOutcome, Chess.NextPlayer, 'the second time');
+  playAll(knights, 'g1f3 g8f6 f3g1 f6g8');
+  assert.equal(knights.lastOutcome, Chess.Repetition);
+  assert.equal(play(knights, 'e2', 'e4'), Chess.GameOver);
+
+  const kings = new Chess.Game(fenBoard('r3k2r/8/8/8/8/8/8/R3K2R'));
+  playAll(kings, 'e1f1 e8f8 f1e1 f8e8 e1f1 e8f8 f1e1 f8e8');
+  assert.equal(kings.lastOutcome, Chess.NextPlayer, 'the first time, both players could still castle');
+  playAll(kings, 'e1f1 e8f8');
+  assert.equal(kings.lastOutcome, Chess.Repetition);
+});
+
+test('move generation matches the published perft node counts', () => {
+  const positions: [string, number[]][] = [
+    ['rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR', [20, 400, 8902]],
+    ['r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R', [48, 2039]],
+    ['8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8', [14, 191, 2812]],
+    ['r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1', [6, 264]],
+    ['rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R', [44, 1486]],
+  ];
+  for (const position of positions) {
+    position[1].forEach((nodes, index) => {
+      assert.equal(perft(Chess.White, [fenBoard(position[0])], index + 1), nodes, `${position[0]} at depth ${index + 1}`);
+    });
+  }
+});
+
+test('algebraic names map to the Scala coordinates', () => {
+  assert.equal(squareName([0, 0]), 'a8');
+  assert.equal(squareName([7, 7]), 'h1');
+  assert.deepEqual(squareAt('e2'), [6, 4]);
+  assert.equal(squareAt('i1'), null);
+  assert.equal(squareAt(42), null);
+  assert.equal(promotionAt('N'), Chess.Knight);
+  assert.equal(promotionAt('K'), null);
+  assert.equal(promotionAt('constructor'), null);
+});
+
+/** Two chess seats wired through ordered queues that round-trip the wire codec. */
+function table() {
+  const queues: unknown[][] = [[], []];
+  const online = [true, true];
+  const seatAt = (seat: 0 | 1) => new ChessSession({
+    seat,
+    send: (message) => {
+      if (!online[seat]) return false;
+      queues[1 - seat].push(WireCodec.decode(WireCodec.encode(message)));
+      return true;
+    },
+  });
+  const seats = [seatAt(0), seatAt(1)];
   const flush = () => {
-    for (let count = 0; queues.some((queue) => queue.length); count += 1) {
-      assert.ok(count < 20, 'handshake converges');
-      for (const seat of [0, 1]) {
-        for (const message of queues[seat].splice(0)) sessions[seat].receive(message);
-      }
+    for (let round = 0; queues[0].length > 0 || queues[1].length > 0; round += 1) {
+      assert.ok(round < 50, 'messages settle');
+      for (const seat of [0, 1]) for (const message of queues[seat].splice(0)) seats[seat].receive(message);
     }
   };
-  sessions[0].connect();
-  flush();
-  assert.equal(sessions[1].phase, 'Idle', 'remote ready waits for local connection');
-  sessions[1].connect();
-  flush();
-  assert.ok(sessions.every((session) => session.phase === 'Playing'));
-  return { sessions, identities, queues, flush };
+  return { seats, queues, online, flush, reload: (seat: 0 | 1) => { seats[seat] = seatAt(seat); } };
 }
 
-function resignStep() {
-  const pair = pairedSessions();
-  assert.equal(pair.sessions[0].submitResign(), true);
-  pair.flush();
-  return pair;
+function connectedTable() {
+  const pipe = table();
+  pipe.seats.forEach((session) => session.connect());
+  pipe.flush();
+  return pipe;
 }
 
-test('signed peers apply alternating moves and agree on checkmate and chain tip', () => {
-  const pair = pairedSessions();
-  const moves = [['f2', 'f3'], ['e7', 'e5'], ['g2', 'g4'], ['d8', 'h4']];
-  moves.forEach((move, index) => {
-    assert.equal(pair.sessions[index % 2].submitMove({ from: move[0], to: move[1] }), true);
-    pair.flush();
-    assert.equal(pair.sessions[0].view().position, pair.sessions[1].view().position);
-  });
-  assert.deepEqual(pair.sessions[0].lastResult, { winner: 1, reason: 'checkmate' });
-  assert.deepEqual(pair.sessions[0].view().history, pair.sessions[1].view().history);
-  assert.ok(pair.sessions[1].view().history.every((entry) => entry.verified));
+function move(pipe: ReturnType<typeof table>, seat: 0 | 1, text: string): void {
+  assert.equal(pipe.seats[seat].submitMove({ from: text.slice(0, 2), to: text.slice(2, 4) }), true, text);
+  pipe.flush();
+}
+
+test('the seats start a game when their links come up, also when one hello arrives early', () => {
+  const pipe = table();
+  pipe.seats[0].connect();
+  pipe.flush();
+  assert.equal(pipe.seats[1].phase, ChessPhase.Idle, 'the early hello waits for the link');
+  pipe.seats[1].connect();
+  pipe.flush();
+  for (const session of pipe.seats) {
+    assert.equal(session.phase, ChessPhase.Playing);
+    assert.equal(session.matchNo, 1);
+  }
+  assert.equal(pipe.seats[0].view().isMyTurn, true, 'the host plays White');
+  assert.equal(pipe.seats[0].view().legalMoves.length, 20);
+  assert.deepEqual(pipe.seats[1].view().legalMoves, []);
 });
 
-test('duplicate moves are ignored, tampered signatures fail without applying a move', () => {
-  const pair = pairedSessions();
-  pair.sessions[0].submitMove({ from: 'e2', to: 'e4' });
-  const message = pair.queues[1][0];
-  pair.flush();
-  pair.sessions[1].receive(message);
-  assert.equal(pair.sessions[1].game.ply, 1);
-  const before = pair.sessions[1].view().position;
-  pair.sessions[1].receive({ kind: 'chess', packet: { ...message.packet, body: message.packet.body.replace('chess-step', 'bad-step') } });
-  assert.equal(pair.sessions[1].phase, 'Failed');
-  assert.equal(pair.sessions[1].view().position, before);
+test('moves alternate and both replicas agree on checkmate', () => {
+  const pipe = connectedTable();
+  move(pipe, 0, 'f2f3');
+  move(pipe, 1, 'e7e5');
+  move(pipe, 0, 'g2g4');
+  move(pipe, 1, 'd8h4');
+  for (const session of pipe.seats) {
+    assert.equal(session.phase, ChessPhase.Ended);
+    assert.deepEqual(session.result, { winner: 1, reason: Chess.CheckMate });
+    assert.equal(session.view().check, 'e1');
+  }
+  assert.deepEqual(pipe.seats[0].view().board, pipe.seats[1].view().board);
+  assert.deepEqual(pipe.seats[0].history, pipe.seats[1].history);
+  assert.deepEqual(pipe.seats[1].history.map((played) => played.by), [0, 1, 0, 1]);
 });
 
-test('signed but out-of-order, illegal and out-of-turn actions are rejected', () => {
-  for (const defect of ['position', 'sequence', 'illegal']) {
-    const pair = pairedSessions();
-    const sender = 0;
-    pair.sessions[0].submitMove({ from: 'e2', to: 'e4' });
-    const original = pair.queues[1][0];
-    const value = JSON.parse(original.packet.body);
-    if (defect === 'position') value.position = 'wrong position';
-    if (defect === 'sequence') value.sequence = 99;
-    if (defect === 'illegal') value.action.move = { from: [6, 4], to: [3, 4] };
-    const body = JSON.stringify(value);
-    const receiver = pair.sessions[1 - sender];
-    const position = receiver.view().position;
-    receiver.receive({ kind: 'chess', packet: { body, signature: pair.identities[sender].sign(body) } });
-    assert.equal(receiver.phase, 'Failed', defect);
-    assert.equal(receiver.view().position, position, defect);
+test('a seat cannot move for the other seat, nor play an invalid move', () => {
+  const pipe = connectedTable();
+  assert.equal(pipe.seats[1].submitMove({ from: 'e7', to: 'e5' }), false);
+  assert.equal(pipe.seats[0].submitMove({ from: 'e2', to: 'e5' }), false);
+  assert.equal(pipe.seats[0].submitMove({ from: 'x9', to: 'e4' }), false);
+  assert.deepEqual(pipe.queues, [[], []]);
+});
+
+test('a move out of turn, out of order, unreadable or invalid stops the game without changing it', () => {
+  const cases: [0 | 1, object][] = [
+    [0, { kind: 'chess-move', match: 1, ply: 0, from: 'e7', to: 'e5' }],
+    [1, { kind: 'chess-move', match: 1, ply: 3, from: 'e2', to: 'e4' }],
+    [1, { kind: 'chess-move', match: 1, ply: 0, from: 'e2', to: 'z4' }],
+    [1, { kind: 'chess-move', match: 1, ply: 0, from: 'e2', to: 'e5' }],
+  ];
+  for (const each of cases) {
+    const pipe = connectedTable();
+    const session = pipe.seats[each[0]];
+    session.receive(each[1]);
+    assert.equal(session.phase, ChessPhase.Failed, JSON.stringify(each[1]));
+    assert.equal(session.game.ply, 0);
+    assert.ok(session.error);
   }
 });
 
-test('a validly signed wrong-turn move is rejected after passing state checks', () => {
-  const pair = pairedSessions();
-  pair.sessions[0].submitMove({ from: 'e2', to: 'e4' });
-  const original = pair.queues[1][0];
-  pair.sessions[0].game.undo();
-  const value = JSON.parse(original.packet.body);
-  value.by = 1;
-  value.action.move = { from: [1, 4], to: [3, 4] };
-  const body = JSON.stringify(value);
-  const receiver = new ChessSession({ seat: 0, identity: pair.identities[0], peerKey: new PeerKey(pair.identities[1].publicKeyHex), send: () => true });
-  receiver.connect();
-  const readyBody = JSON.stringify({ kind: 'chess-ready', version: 1, match: 1, by: 1 });
-  receiver.receive({ kind: 'chess', packet: { body: readyBody, signature: pair.identities[1].sign(readyBody) } });
-  receiver.receive({ kind: 'chess', packet: { body, signature: pair.identities[1].sign(body) } });
-  assert.equal(receiver.error, 'Invalid move or wrong player turn');
-  assert.equal(receiver.game.ply, 0);
+test('moves of an earlier game are ignored', () => {
+  const pipe = connectedTable();
+  pipe.seats[1].receive({ kind: 'chess-move', match: 0, ply: 0, from: 'e2', to: 'e4' });
+  assert.equal(pipe.seats[1].phase, ChessPhase.Playing);
+  assert.equal(pipe.seats[1].game.ply, 0);
 });
 
-test('one-sided reconnect reaches the same fresh game on both peers', () => {
-  const pair = pairedSessions();
-  pair.sessions[0].disconnect();
-  pair.sessions[0].connect();
-  pair.flush();
-  assert.ok(pair.sessions.every((session) => session.matchNo === 2 && session.phase === 'Playing'));
+test('either seat may resign on any turn, and both seats see the result', () => {
+  const pipe = connectedTable();
+  assert.equal(pipe.seats[1].resign(), true, 'Black resigns on White’s turn');
+  pipe.flush();
+  for (const session of pipe.seats) assert.deepEqual(session.result, { winner: 0, reason: Resignation });
 });
 
-test('a failed transport send rolls back the local move', () => {
-  const pair = pairedSessions();
-  let reject = false;
-  const player = new ChessSession({ seat: 0, identity: pair.identities[0], peerKey: new PeerKey(pair.identities[1].publicKeyHex), send: () => !reject });
-  player.connect();
-  const body = JSON.stringify({ kind: 'chess-ready', version: 1, match: 1, by: 1 });
-  player.receive({ kind: 'chess', packet: { body, signature: pair.identities[1].sign(body) } });
-  const before = player.game.fen;
-  reject = true;
-  assert.equal(player.submitMove({ from: 'e2', to: 'e4' }), false);
-  assert.equal(player.game.fen, before);
-  assert.equal(player.game.ply, 0);
-  assert.equal(player.moves.length, 0);
-  reject = false;
-  assert.equal(player.submitMove({ from: 'e2', to: 'e4' }), true);
+test('resigning at the same moment is a draw on both seats', () => {
+  const pipe = connectedTable();
+  pipe.seats[0].resign();
+  pipe.seats[1].resign();
+  pipe.flush();
+  for (const session of pipe.seats) assert.deepEqual(session.result, { winner: null, reason: Resignation });
 });
 
-test('resignation works outside the player turn; rematch requires both players', () => {
-  const pair = resignStep();
-  assert.deepEqual(pair.sessions[0].lastResult, { winner: 1, reason: 'resignation' });
-  pair.sessions[0].requestRematch();
-  pair.flush();
-  assert.equal(pair.sessions[1].matchNo, 1);
-  assert.equal(pair.sessions[1].view().peerWantsRematch, true);
-  pair.sessions[1].requestRematch();
-  pair.flush();
-  assert.ok(pair.sessions.every((session) => session.matchNo === 2 && session.game.ply === 0 && session.phase === 'Playing'));
+test('a new game starts only when both seats ask for it', () => {
+  const pipe = connectedTable();
+  pipe.seats[1].resign();
+  pipe.flush();
+  assert.equal(pipe.seats[0].requestRematch(), true);
+  pipe.flush();
+  assert.equal(pipe.seats[1].view().peerWantsRematch, true);
+  assert.equal(pipe.seats[0].view().iWantRematch, true);
+  assert.equal(pipe.seats[0].phase, ChessPhase.Ended);
+  assert.equal(pipe.seats[1].requestRematch(), true);
+  pipe.flush();
+  for (const session of pipe.seats) {
+    assert.equal(session.phase, ChessPhase.Playing);
+    assert.equal(session.matchNo, 2);
+    assert.equal(session.game.ply, 0);
+    assert.equal(session.result, null);
+  }
 });
 
-test('disconnection pauses actions and reconnection starts a fresh agreed match', () => {
-  const pair = pairedSessions();
-  pair.sessions[0].disconnect();
-  pair.sessions[1].disconnect();
-  assert.equal(pair.sessions[0].submitMove({ from: 'e2', to: 'e4' }), false);
-  pair.sessions[0].connect();
-  pair.flush();
-  pair.sessions[1].connect();
-  pair.flush();
-  assert.ok(pair.sessions.every((session) => session.matchNo === 2 && session.phase === 'Playing'));
-  pair.sessions.forEach((session) => session.close());
+test('the promotion choice travels with the move', () => {
+  const pipe = connectedTable();
+  for (const session of pipe.seats) session.game = new Chess.Game(fenBoard('7k/P6p/8/8/8/8/8/K7'));
+  assert.equal(pipe.seats[0].submitMove({ from: 'a7', to: 'a8', promotion: 'N' }), true);
+  pipe.flush();
+  for (const session of pipe.seats) {
+    assert.equal(session.game.recent[0][0]?.[1], Chess.Knight);
+    assert.deepEqual(session.history, [{ by: 0, from: 'a7', to: 'a8', promotion: 'N' }]);
+  }
+});
+
+test('a dropped link resumes the same game when both seats kept it', () => {
+  const pipe = connectedTable();
+  move(pipe, 0, 'e2e4');
+  move(pipe, 1, 'e7e5');
+  pipe.seats.forEach((session) => session.disconnect());
+  assert.equal(pipe.seats[0].submitMove({ from: 'g1', to: 'f3' }), false);
+  pipe.seats.forEach((session) => session.connect());
+  pipe.flush();
+  for (const session of pipe.seats) {
+    assert.equal(session.phase, ChessPhase.Playing);
+    assert.equal(session.matchNo, 1);
+    assert.equal(session.game.ply, 2);
+  }
+  move(pipe, 0, 'g1f3');
+});
+
+test('one seat reconnecting on its own resumes the game', () => {
+  const pipe = connectedTable();
+  move(pipe, 0, 'd2d4');
+  pipe.seats[1].disconnect();
+  pipe.seats[1].connect();
+  pipe.flush();
+  for (const session of pipe.seats) {
+    assert.equal(session.phase, ChessPhase.Playing);
+    assert.equal(session.matchNo, 1);
+  }
+  move(pipe, 1, 'd7d5');
+});
+
+test('a seat that lost its game in a reload makes both seats start a new one', () => {
+  const pipe = connectedTable();
+  move(pipe, 0, 'e2e4');
+  pipe.reload(1);
+  pipe.seats[1].connect();
+  pipe.flush();
+  for (const session of pipe.seats) {
+    assert.equal(session.phase, ChessPhase.Playing);
+    assert.equal(session.matchNo, 2);
+    assert.equal(session.game.ply, 0);
+  }
+});
+
+test('a move that cannot be sent is taken back', () => {
+  const pipe = connectedTable();
+  pipe.online[0] = false;
+  assert.equal(pipe.seats[0].submitMove({ from: 'e2', to: 'e4' }), false);
+  assert.equal(pipe.seats[0].game.ply, 0);
+  assert.deepEqual(pipe.seats[0].history, []);
+  pipe.online[0] = true;
+  assert.equal(pipe.seats[0].submitMove({ from: 'e2', to: 'e4' }), true);
+});
+
+test('a stopped game recovers when both seats agree on a new one', () => {
+  const pipe = connectedTable();
+  pipe.seats[1].receive({ kind: 'chess-move', match: 1, ply: 0, from: 'e2', to: 'e5' });
+  assert.equal(pipe.seats[1].phase, ChessPhase.Failed);
+  assert.equal(pipe.seats[1].requestRematch(), true);
+  pipe.flush();
+  assert.equal(pipe.seats[0].view().peerWantsRematch, true, 'the other seat is asked even mid-game');
+  assert.equal(pipe.seats[0].requestRematch(), true);
+  pipe.flush();
+  for (const session of pipe.seats) {
+    assert.equal(session.phase, ChessPhase.Playing);
+    assert.equal(session.matchNo, 2);
+    assert.equal(session.error, null);
+  }
 });

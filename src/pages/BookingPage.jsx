@@ -3,15 +3,11 @@ import { useMutation, useQuery } from 'convex/react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '../../convex/_generated/api';
 import { Brand, Splash } from '../components/Splash.jsx';
+import { GAMES, GameKind } from '../lib/meet/games.js';
 import { ViewerTime } from '../lib/time/ViewerTime.js';
 
 const DURATIONS = [15, 30, 45, 60];
 const DEFAULT_DURATION = 30;
-const GAMES = [
-  { value: 'poker', label: 'Poker', description: 'Heads-up, 1000 chips each, no real money.' },
-  { value: 'chess', label: 'Chess', description: 'Heads-up, free, one quick game before the meeting.' },
-];
-const DEFAULT_GAME = 'poker';
 
 /** Public page from a host's booking link. Slots render in the guest's own time zone. */
 export function BookingPage() {
@@ -20,7 +16,7 @@ export function BookingPage() {
   const host = useQuery(api.hosts.bySlug, { slug: params.slug });
   const book = useMutation(api.booking.book);
   const [durationMinutes, setDurationMinutes] = useState(DEFAULT_DURATION);
-  const [game, setGame] = useState(DEFAULT_GAME);
+  const [game, setGame] = useState(GameKind.Poker);
   const [weekStart, setWeekStart] = useState(() => ViewerTime.startOfWeek(new Date()));
   const [selectedSlot, setSelectedSlot] = useState(null);
   const [form, setForm] = useState({ name: '', email: '' });
@@ -66,8 +62,8 @@ export function BookingPage() {
         <p className="text-sm uppercase tracking-widest text-rose-300">Book a Private Meet</p>
         <h1 className="mt-1 text-3xl font-black text-white">Meet {host.displayName}</h1>
         <p className="mt-2 max-w-2xl text-sm text-slate-400">
-          Pick a time that suits you. You will both get an email invite. At meeting time, open the link and play a friendly
-          game of heads-up poker (1000 play chips, no real money) over a private peer-to-peer video call.
+          Pick a game and a time that suits you. You will both get an email invite. At meeting time, open the link and play a
+          friendly game of poker or chess over a private peer-to-peer video call.
         </p>
 
         <div className="mt-6 grid gap-4 md:grid-cols-2">
@@ -86,22 +82,13 @@ export function BookingPage() {
               ))}
             </div>
           </div>
-          <div>
-            <p className="label">Game</p>
-            <div className="flex flex-col gap-2">
-              {GAMES.map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => setGame(option.value)}
-                  className={`rounded-lg border px-3 py-2 text-left text-sm transition ${game === option.value ? 'border-rose-400 bg-rose-500/20 text-white' : 'border-slate-600 text-slate-300 hover:text-white'}`}
-                >
-                  <div className="font-semibold">{option.label}</div>
-                  <div className="text-xs text-slate-400">{option.description}</div>
-                </button>
-              ))}
-            </div>
-          </div>
+          <label className="block">
+            <span className="label">Game</span>
+            <select className="field" required value={game} onChange={(event) => setGame(event.target.value)}>
+              {GAMES.map((option) => <option key={option.kind} value={option.kind}>{option.label}</option>)}
+            </select>
+            <span className="mt-1 block text-xs text-slate-400">{GAMES.find((option) => option.kind === game).description}</span>
+          </label>
         </div>
       </section>
 

@@ -40,7 +40,7 @@ export const listRange = query({
   },
 });
 
-/** Everything the poker table needs: meeting header, own seat, and the other seat's peer. */
+/** Everything the meeting table needs: header, game, own seat, and the other seat's peer. */
 export const forTable = query({
   args: { meetingId: v.string(), token: v.string() },
   handler: async (ctx, args) => {

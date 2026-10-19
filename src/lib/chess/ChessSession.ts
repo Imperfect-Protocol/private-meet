@@ -1,272 +1,356 @@
-import { sha256 } from '@noble/hashes/sha256';
-import { bytesToHex } from '@noble/hashes/utils';
-import {
-  Game, White, Check, CheckMate, Stalemate, Draw, type Move, type Promotion,
-} from './Chess';
-import { boardCharacters, isSquare, squareCoordinates, squareName } from './ChessPosition';
+import { Check, CheckMate, Game, Pawn, White, isGameOver, kingSquare, type InvalidMove, type Outcome, type Piece, type Square } from './Chess';
+import { boardLetters, promotionAt, squareAt, squareName } from './Notation';
 
+/** Lifecycle of chess at a meeting table. Initial: Idle. Final: Closed. Error: Failed. */
 export const ChessPhase = Object.freeze({
-  Idle: 'Idle', AwaitingPeer: 'AwaitingPeer', Playing: 'Playing',
-  Ended: 'Ended', Failed: 'Failed', Closed: 'Closed',
+  /** Created; the link to the other seat is not up yet. */
+  Idle: 'Idle',
+  /** The link is up; waiting for the other seat's hello to resume the game or start a new one. */
+  AwaitingPeer: 'AwaitingPeer',
+  Playing: 'Playing',
+  /** Checkmate, draw or resignation; the seats may agree on a new game. */
+  Ended: 'Ended',
+  /** The link is down; the game is kept so both seats can resume it. */
+  Disconnected: 'Disconnected',
+  /** The other seat sent a move this replica cannot accept; the seats may agree on a new game. */
+  Failed: 'Failed',
+  Closed: 'Closed',
 } as const);
-export type ChessPhase = typeof ChessPhase[keyof typeof ChessPhase];
-type Seat = 0 | 1;
-interface Identity { sign(text: string): string }
-interface Verifier { verifies(text: string, signature: string): boolean }
-type Action = { type: 'move'; move: Move } | { type: 'resign' };
-interface Ready {
-  kind: 'chess-ready'; version: 1; match: number; by: Seat;
+export type ChessPhase = (typeof ChessPhase)[keyof typeof ChessPhase];
+
+export type Seat = 0 | 1;
+export const Resignation = 'Resignation';
+
+/** A move by square names; the promotion letter only when a Pawn reaches the last rank. */
+export interface ChessMove {
+  readonly from: string;
+  readonly to: string;
+  readonly promotion?: string;
 }
-interface Step {
-  kind: 'chess-step'; version: 1; match: number; by: Seat;
-  sequence: number; previous: string; position: string; action: Action;
+
+/** A played move and the seat that played it. */
+export interface PlayedMove extends ChessMove {
+  readonly by: Seat;
 }
-interface Packet { body: string; signature: string }
-export interface ChessMessage { kind: 'chess'; packet: Packet }
+
+/** How a game ended. A draw has no winner. */
+export interface ChessResult {
+  readonly winner: Seat | null;
+  readonly reason: Outcome | typeof Resignation;
+}
+
+/** What the chess table shows. */
+export interface ChessView {
+  readonly phase: ChessPhase;
+  readonly matchNo: number;
+  readonly seat: Seat;
+  readonly turn: Seat;
+  readonly isMyTurn: boolean;
+  /** FEN letters by rank, rank 8 first; null for vacant squares. */
+  readonly board: (string | null)[][];
+  /** Legal moves while it is this seat's turn. */
+  readonly legalMoves: readonly ChessMove[];
+  readonly history: readonly PlayedMove[];
+  /** Square of the King in check. */
+  readonly check: string | null;
+  readonly result: ChessResult | null;
+  readonly error: string | null;
+  readonly iWantRematch: boolean;
+  readonly peerWantsRematch: boolean;
+}
+
+/** A seat's game as it announces it when its link comes up; equal games are resumed. */
+interface Hello {
+  readonly match: number;
+  readonly ply: number;
+  readonly ended: boolean;
+  readonly failed: boolean;
+}
+
+/** Agreement on a new game: it starts once both seats ask for it. */
+interface Rematch {
+  local: boolean;
+  remote: boolean;
+}
+
+/** A named move resolved against the board on the table. */
+interface ResolvedMove {
+  readonly from: Square;
+  readonly to: Square;
+  readonly promotion?: Piece;
+  readonly notation: ChessMove;
+}
+
 interface Options {
-  seat: Seat;
-  identity: Identity;
-  send(message: ChessMessage): boolean | void;
-  peerKey?: Verifier;
-  onChange?: () => void;
-  log?: (line: string) => void;
+  readonly seat: Seat;
+  readonly send: (message: object) => boolean;
+  readonly onChange?: () => void;
+  readonly log?: (line: string) => void;
 }
-interface Result { winner: Seat | null; reason: 'checkmate' | 'stalemate' | 'resignation' | 'draw' }
-interface HistoryEntry {
-  from: string; to: string; by: Seat; signature: string; sequence: number;
-  digest: string; verified: true;
-}
-const digest = (body: string): string => bytesToHex(sha256(new TextEncoder().encode(body)));
-const validMatch = (value: unknown): value is number => Number.isSafeInteger(value) && Number(value) > 0;
+
+type Fields = Readonly<Record<string, unknown>>;
+
+const Message = Object.freeze({
+  Hello: 'chess-hello',
+  Move: 'chess-move',
+  Resign: 'chess-resign',
+  Rematch: 'chess-rematch',
+});
+
+const isCount = (value: unknown): value is number => Number.isSafeInteger(value) && (value as number) >= 0;
+const otherSeat = (seat: Seat): Seat => (seat === 0 ? 1 : 0);
+const noRematch = (): Rematch => ({ local: false, remote: false });
 
 /**
- * Two replicas of the Scala-style Game connected by signed, hash-linked actions.
- * Initial: Idle; final: Closed; protocol/signature failures: Failed.
- * Host is White, guest is Black. Media and transport remain outside the game.
+ * Chess between the two seats of a meeting. The meeting link signs and verifies every message;
+ * this session keeps the two Game replicas in step. A move counts only when it is the sender's
+ * turn, at the expected ply, and legal. The host (seat 0) plays White.
  */
 export class ChessSession {
   readonly seat: Seat;
-  readonly identity: Identity;
-  game = new Game();
   phase: ChessPhase = ChessPhase.Idle;
   matchNo = 0;
-  moves: HistoryEntry[] = [];
-  lastResult: Result | null = null;
+  game = new Game();
+  history: PlayedMove[] = [];
+  result: ChessResult | null = null;
   error: string | null = null;
-  private readonly send: Options['send'];
+  private readonly send: (message: object) => boolean;
   private readonly onChange: () => void;
   private readonly log: (line: string) => void;
-  private peerKey?: Verifier;
-  private connected = false;
-  private localReady = 0;
-  private remoteReady = 0;
-  private sequence = 0;
-  private tip = '';
-  private readonly seen = new Set<string>();
+  private pendingHello: Hello | null = null;
+  private rematch: Rematch = noRematch();
 
   constructor(options: Options) {
     this.seat = options.seat;
-    this.identity = options.identity;
     this.send = options.send;
     this.onChange = options.onChange ?? (() => {});
     this.log = options.log ?? (() => {});
-    this.peerKey = options.peerKey;
   }
 
-  setPeerKey(key: Verifier): void { this.peerKey = key; }
-  currentTurnSeat(): Seat { return this.game.turn.code === White.code ? 0 : 1; }
-  isMyTurn(): boolean { return this.connected && this.phase === ChessPhase.Playing && this.currentTurnSeat() === this.seat; }
+  /** Seat whose turn it is: White is seat 0. */
+  turnSeat(): Seat {
+    return this.game.turn === White ? 0 : 1;
+  }
 
+  isMyTurn(): boolean {
+    return this.phase === ChessPhase.Playing && this.turnSeat() === this.seat;
+  }
+
+  /** The link is up: announce this replica's game; the other seat's hello decides what follows. */
   connect(): void {
-    if (this.phase === ChessPhase.Closed || (this.connected && this.phase !== ChessPhase.AwaitingPeer)) return;
-    this.connected = true;
-    this.requestMatch(Math.max(this.matchNo + 1, this.remoteReady));
+    if (this.phase !== ChessPhase.Idle && this.phase !== ChessPhase.Disconnected) return;
+    this.transition(ChessPhase.AwaitingPeer);
+    this.sendHello(false);
+    const early = this.pendingHello;
+    this.pendingHello = null;
+    if (early) this.settle(early);
   }
 
+  /** The link is down: keep the game so both seats can resume it. */
   disconnect(): void {
-    if (this.phase === ChessPhase.Closed) return;
-    this.connected = false;
-    this.transition(ChessPhase.AwaitingPeer);
+    if (this.phase === ChessPhase.Idle || this.phase === ChessPhase.Disconnected || this.phase === ChessPhase.Closed) return;
+    this.rematch = noRematch();
+    this.transition(ChessPhase.Disconnected);
   }
 
   close(): void {
-    this.connected = false;
     this.transition(ChessPhase.Closed);
   }
 
-  /** Both participants must request the rematch; it never reloads or interrupts the call. */
-  requestRematch(): void {
-    if (this.connected && this.phase === ChessPhase.Ended) this.requestMatch(this.matchNo + 1);
-  }
-
-  private requestMatch(match: number): void {
-    if (this.phase !== ChessPhase.Ended) this.transition(ChessPhase.AwaitingPeer);
-    if (!this.publish({ kind: 'chess-ready', version: 1, match, by: this.seat })) return;
-    this.localReady = match;
-    this.reconcile();
-    this.onChange();
-  }
-
-  private reconcile(): void {
-    if (!this.connected || this.localReady <= this.matchNo) return;
-    if (this.remoteReady > this.localReady && this.phase === ChessPhase.AwaitingPeer) {
-      this.requestMatch(this.remoteReady);
-    } else if (this.remoteReady === this.localReady) {
-      this.matchNo = this.localReady;
-      this.game = new Game();
-      this.moves = [];
-      this.lastResult = null;
-      this.error = null;
-      this.sequence = 0;
-      this.tip = digest(`private-meet:scala-chess:1:${this.matchNo}`);
-      this.seen.clear();
-      this.log(`Chess game ${this.matchNo} started`);
-      this.transition(ChessPhase.Playing);
-    }
-  }
-
-  submitMove(move: { from: string; to: string; promotion?: Promotion }): boolean {
+  /** Plays a move of this seat and sends it. False when it is not legal or cannot be sent. */
+  submitMove(move: ChessMove): boolean {
     if (!this.isMyTurn()) return false;
-    const from = squareCoordinates(move.from);
-    const to = squareCoordinates(move.to);
-    if (!from || !to) return false;
-    return this.submit({ type: 'move', move: { from, to, ...(move.promotion ? { promotion: move.promotion } : {}) } });
-  }
-
-  submitResign(): boolean {
-    if (!this.connected || this.phase !== ChessPhase.Playing) return false;
-    return this.submit({ type: 'resign' });
-  }
-
-  private submit(action: Action): boolean {
-    const step: Step = {
-      kind: 'chess-step', version: 1, match: this.matchNo, by: this.seat,
-      sequence: this.sequence + 1, previous: this.tip,
-      position: this.game.fen, action,
-    };
-    if (action.type === 'move') {
-      const error = this.game.play(action.move.from[0], action.move.from[1])(action.move.to[0], action.move.to[1], action.move.promotion);
-      if (error !== null) return false;
-    }
-    let packet: Packet;
-    try {
-      packet = this.sign(step);
-      if (this.send({ kind: 'chess', packet }) === false) throw new Error('Peer disconnected');
-    } catch {
-      if (action.type === 'move') this.game.undo();
-      this.log('Move not sent: peer disconnected');
+    const ply = this.game.ply;
+    const resolved = this.resolve(move);
+    if (!resolved || this.play(resolved) !== null) return false;
+    if (!this.send({ kind: Message.Move, match: this.matchNo, ply, ...resolved.notation })) {
+      this.game.undo();
+      this.log('Move not sent: the other player is not connected');
       return false;
     }
-    this.commit(step, packet);
+    this.record(this.seat, resolved.notation);
+    return true;
+  }
+
+  /** Either seat may resign while the game is on, on any turn. */
+  resign(): boolean {
+    if (this.phase !== ChessPhase.Playing || !this.send({ kind: Message.Resign, match: this.matchNo })) return false;
+    this.log('You resigned');
+    this.finish({ winner: otherSeat(this.seat), reason: Resignation });
+    return true;
+  }
+
+  /** Asks for a new game; it starts when the other seat asks too. */
+  requestRematch(): boolean {
+    if (!this.canRematch() || this.rematch.local) return false;
+    if (!this.send({ kind: Message.Rematch, match: this.matchNo + 1 })) return false;
+    this.rematch.local = true;
+    this.startIfAgreed();
     return true;
   }
 
   receive(message: unknown): void {
-    if (this.phase === ChessPhase.Closed || this.phase === ChessPhase.Failed) return;
-    if (!message || typeof message !== 'object' || !('kind' in message) || message.kind !== 'chess') return;
-    const packet = 'packet' in message ? message.packet as Packet : null;
-    if (!packet || typeof packet.body !== 'string' || typeof packet.signature !== 'string'
-      || !this.peerKey?.verifies(packet.body, packet.signature)) {
-      this.fail('Invalid peer signature');
-      return;
-    }
-    let value: Record<string, unknown>;
-    try {
-      const decoded: unknown = JSON.parse(packet.body);
-      if (!decoded || typeof decoded !== 'object' || Array.isArray(decoded)) throw new Error();
-      value = decoded as Record<string, unknown>;
-    } catch {
-      this.fail('Invalid chess message');
-      return;
-    }
-    if (value.version !== 1 || value.by !== 1 - this.seat || !validMatch(value.match)) {
-      this.fail('Invalid chess sender or version');
-      return;
-    }
-    if (value.kind === 'chess-ready') {
-      this.remoteReady = Math.max(this.remoteReady, value.match);
-      if (this.connected && this.phase === ChessPhase.Playing && value.match > this.matchNo) {
-        this.requestMatch(value.match);
-      }
-      this.reconcile();
-      this.onChange();
-      return;
-    }
-    if (value.kind !== 'chess-step') { this.fail('Unknown chess action'); return; }
-    if (value.match < this.matchNo || this.seen.has(digest(packet.body))) return;
-    if (!this.connected || this.phase !== ChessPhase.Playing || value.match !== this.matchNo
-      || value.sequence !== this.sequence + 1 || value.previous !== this.tip
-      || value.position !== this.game.fen) {
-      this.fail('Peer state or sequence mismatch');
-      return;
-    }
-    const action = value.action as Action | undefined;
-    if (action?.type === 'move') {
-      if (this.currentTurnSeat() !== value.by || !isSquare(action.move?.from) || !isSquare(action.move?.to)) {
-        this.fail('Invalid move or wrong player turn');
-        return;
-      }
-      const error = this.game.play(action.move.from[0], action.move.from[1])(action.move.to[0], action.move.to[1], action.move.promotion);
-      if (error !== null) { this.fail(`Peer move rejected: ${error}`); return; }
-    } else if (action?.type !== 'resign') {
-      this.fail('Unknown chess action');
-      return;
-    }
-    this.commit(value as unknown as Step, packet);
+    if (this.phase === ChessPhase.Closed || typeof message !== 'object' || message === null) return;
+    const fields = message as Fields;
+    if (fields.kind === Message.Hello) this.receiveHello(fields);
+    else if (fields.kind === Message.Move) this.receiveMove(fields);
+    else if (fields.kind === Message.Resign) this.receiveResign(fields);
+    else if (fields.kind === Message.Rematch) this.receiveRematch(fields);
   }
 
-  private sign(value: Ready | Step): Packet {
-    const body = JSON.stringify(value);
-    return { body, signature: this.identity.sign(body) };
-  }
-  private publish(value: Ready): boolean {
-    try { return this.send({ kind: 'chess', packet: this.sign(value) }) !== false; }
-    catch { this.log('Readiness could not be sent'); return false; }
+  view(): ChessView {
+    const myTurn = this.isMyTurn();
+    const checked = this.game.lastOutcome === Check || this.game.lastOutcome === CheckMate;
+    return {
+      phase: this.phase,
+      matchNo: this.matchNo,
+      seat: this.seat,
+      turn: this.turnSeat(),
+      isMyTurn: myTurn,
+      board: boardLetters(this.game.recent),
+      legalMoves: myTurn
+        ? this.game.legalMoves().map((move) => ({
+          from: squareName(move.from),
+          to: squareName(move.to),
+          ...(move.promotion ? { promotion: move.promotion.code } : {}),
+        }))
+        : [],
+      history: this.history,
+      check: checked ? squareName(kingSquare(this.game.turn)(this.game.recent)) : null,
+      result: this.result,
+      error: this.error,
+      iWantRematch: this.rematch.local,
+      peerWantsRematch: this.rematch.remote,
+    };
   }
 
-  private commit(step: Step, packet: Packet): void {
-    this.sequence = step.sequence;
-    this.tip = digest(packet.body);
-    this.seen.add(this.tip);
-    if (step.action.type === 'move') {
-      const move = step.action.move;
-      this.moves = [...this.moves, {
-        from: squareName(move.from), to: squareName(move.to), by: step.by,
-        signature: packet.signature, sequence: step.sequence, digest: this.tip, verified: true,
-      }];
-      this.log(`${step.by === this.seat ? 'Me' : 'Them'}: ${squareName(move.from)} → ${squareName(move.to)}`);
-      if (this.game.lastOutcome === CheckMate || this.game.lastOutcome === Stalemate || this.game.lastOutcome === Draw) {
-        this.lastResult = {
-          winner: this.game.lastOutcome === CheckMate ? step.by : null,
-          reason: this.game.lastOutcome === CheckMate ? 'checkmate' : this.game.lastOutcome === Stalemate ? 'stalemate' : 'draw',
-        };
-        this.transition(ChessPhase.Ended);
-      }
-    } else {
-      this.lastResult = { winner: (1 - step.by) as Seat, reason: 'resignation' };
-      this.transition(ChessPhase.Ended);
+  private receiveHello(fields: Fields): void {
+    if (!isCount(fields.match) || !isCount(fields.ply)) return;
+    const hello: Hello = { match: fields.match, ply: fields.ply, ended: fields.ended === true, failed: fields.failed === true };
+    if (this.phase === ChessPhase.Idle || this.phase === ChessPhase.Disconnected) {
+      this.pendingHello = hello;
+      return;
     }
-    this.onChange();
+    // A first hello comes from a seat whose link just came up, and it needs this replica's state.
+    // A reply settles only a seat that is still waiting for one.
+    if (fields.reply !== true) this.sendHello(true);
+    else if (this.phase !== ChessPhase.AwaitingPeer) return;
+    this.settle(hello);
   }
 
-  private transition(phase: ChessPhase): void { this.phase = phase; this.onChange(); }
+  private receiveMove(fields: Fields): void {
+    if (this.phase !== ChessPhase.Playing || fields.match !== this.matchNo) return;
+    if (fields.ply !== this.game.ply || this.turnSeat() === this.seat) {
+      this.fail('the other player moved out of turn');
+      return;
+    }
+    const resolved = this.resolve(fields);
+    const error = resolved ? this.play(resolved) : 'unreadable';
+    if (resolved === null || error !== null) {
+      this.fail(`the other player sent an invalid move (${error})`);
+      return;
+    }
+    this.record(otherSeat(this.seat), resolved.notation);
+  }
+
+  private receiveResign(fields: Fields): void {
+    if (fields.match !== this.matchNo) return;
+    if (this.phase === ChessPhase.Playing) {
+      this.log('The other player resigned');
+      this.finish({ winner: this.seat, reason: Resignation });
+    } else if (this.phase === ChessPhase.Ended && this.result?.reason === Resignation && this.result.winner !== this.seat) {
+      this.log('Both players resigned');
+      this.finish({ winner: null, reason: Resignation });
+    }
+  }
+
+  private receiveRematch(fields: Fields): void {
+    if (fields.match !== this.matchNo + 1 || !this.canRematch()) return;
+    this.rematch.remote = true;
+    this.startIfAgreed();
+  }
+
+  private sendHello(reply: boolean): void {
+    this.send({
+      kind: Message.Hello,
+      reply,
+      match: this.matchNo,
+      ply: this.game.ply,
+      ended: this.result !== null,
+      failed: this.error !== null,
+    });
+  }
+
+  /** Both seats settle on the same two hellos: an equal, sound game resumes, anything else starts a new one. */
+  private settle(peer: Hello): void {
+    const resumable = this.matchNo > 0 && peer.match === this.matchNo && peer.ply === this.game.ply
+      && peer.ended === (this.result !== null) && !peer.failed && this.error === null;
+    if (!resumable) {
+      this.start(Math.max(this.matchNo, peer.match) + 1);
+      return;
+    }
+    this.rematch = noRematch();
+    this.log(`Chess game ${this.matchNo} resumed`);
+    this.transition(this.result ? ChessPhase.Ended : ChessPhase.Playing);
+  }
+
+  private start(match: number): void {
+    this.matchNo = match;
+    this.game = new Game();
+    this.history = [];
+    this.result = null;
+    this.error = null;
+    this.rematch = noRematch();
+    this.log(`Chess game ${match} started; you play ${this.seat === 0 ? 'White' : 'Black'}`);
+    this.transition(ChessPhase.Playing);
+  }
+
+  private canRematch(): boolean {
+    return this.phase === ChessPhase.Playing || this.phase === ChessPhase.Ended || this.phase === ChessPhase.Failed;
+  }
+
+  private startIfAgreed(): void {
+    if (this.rematch.local && this.rematch.remote) this.start(this.matchNo + 1);
+    else this.onChange();
+  }
+
+  /** Squares of a named move. The promotion counts only for a Pawn reaching the last rank, a Queen if not given. */
+  private resolve(move: { readonly from?: unknown; readonly to?: unknown; readonly promotion?: unknown }): ResolvedMove | null {
+    const from = squareAt(move.from);
+    const to = squareAt(move.to);
+    if (!from || !to) return null;
+    const promoting = this.game.recent[from[0]][from[1]]?.[1] === Pawn && (to[0] === 0 || to[0] === 7);
+    if (!promoting) return { from, to, notation: { from: squareName(from), to: squareName(to) } };
+    const promotion = promotionAt(move.promotion ?? 'Q');
+    if (!promotion) return null;
+    return { from, to, promotion, notation: { from: squareName(from), to: squareName(to), promotion: promotion.code } };
+  }
+
+  private play(move: ResolvedMove): InvalidMove | null {
+    return this.game.play(move.from[0], move.from[1])(move.to[0], move.to[1], move.promotion);
+  }
+
+  private record(by: Seat, move: ChessMove): void {
+    this.history = [...this.history, { ...move, by }];
+    this.log(`${by === this.seat ? 'You' : 'They'} played ${move.from}–${move.to}${move.promotion ? `=${move.promotion}` : ''}`);
+    const outcome = this.game.lastOutcome;
+    if (isGameOver(outcome)) this.finish({ winner: outcome === CheckMate ? by : null, reason: outcome });
+    else this.onChange();
+  }
+
+  private finish(result: ChessResult): void {
+    this.result = result;
+    this.transition(ChessPhase.Ended);
+  }
+
   private fail(reason: string): void {
     this.error = reason;
     this.log(`Chess stopped: ${reason}`);
     this.transition(ChessPhase.Failed);
   }
 
-  view() {
-    return {
-      phase: this.phase, matchNo: this.matchNo, seat: this.seat, turn: this.currentTurnSeat(),
-      snapshot: boardCharacters(this.game.recent), position: this.game.fen,
-      legalMoves: this.phase === ChessPhase.Playing ? this.game.legalMoves()
-        .map((move) => ({ from: squareName(move.from), to: squareName(move.to), promotion: move.promotion })) : [],
-      history: this.moves, lastResult: this.lastResult, isMyTurn: this.isMyTurn(),
-      inCheck: this.game.lastOutcome === Check || this.game.lastOutcome === CheckMate,
-      outcome: this.game.lastOutcome, error: this.error,
-      iWantRematch: this.phase === ChessPhase.Ended && this.localReady > this.matchNo,
-      peerWantsRematch: this.phase === ChessPhase.Ended && this.remoteReady > this.matchNo,
-    };
+  private transition(phase: ChessPhase): void {
+    this.phase = phase;
+    this.onChange();
   }
 }
