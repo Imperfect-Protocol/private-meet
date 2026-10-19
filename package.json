@@ -15,7 +15,7 @@
     "deploy-convex": "npx convex deploy",
     "deploy-wasmer": "cd dist && wasmer deploy",
     "test": "tsx --test tests/*.test.js tests/*.test.ts",
-    "typecheck": "tsc --noEmit -p convex/tsconfig.json",
+    "typecheck": "tsc --noEmit -p convex/tsconfig.json && tsc -p tsconfig.chess.json",
     "setup:auth": "node scripts/setup-local-auth.mjs"
   },
   "dependencies": {
@@ -24,6 +24,7 @@
     "@convex-dev/static-hosting": "^0.2.1",
     "@noble/curves": "^1.9.1",
     "@noble/hashes": "^1.8.0",
+    "chess.js": "1.4.0",
     "convex": "1.45.0",
     "privatepoker-p2p": "file:../privatepoker-p2p",
     "react": "^19.2.4",

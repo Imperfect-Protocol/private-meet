@@ -60,6 +60,7 @@ export default defineSchema({
     guestTimeZone: v.string(),
     startsAt: v.number(),
     durationMinutes: v.number(),
+    game: v.optional(v.union(v.literal("poker"), v.literal("chess"))),
     status: meetingStatus,
   }).index("by_host_time", ["hostId", "startsAt"]),
 

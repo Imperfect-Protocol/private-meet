@@ -47,6 +47,7 @@ export const book = mutation({
     guestName: v.string(),
     guestEmail: v.string(),
     guestTimeZone: v.string(),
+    game: v.union(v.literal("poker"), v.literal("chess")),
   },
   handler: async (ctx, args) => {
     const guestName = args.guestName.trim();
@@ -68,6 +69,7 @@ export const book = mutation({
       guestTimeZone: ZonedClock.isValid(args.guestTimeZone) ? args.guestTimeZone : "UTC",
       startsAt: args.startsAt,
       durationMinutes: args.durationMinutes,
+      game: args.game,
       status: "pending",
     });
     await ctx.db.insert("invites", { meetingId, role: "host", email: host.email, token: newToken(), state: "queued" });

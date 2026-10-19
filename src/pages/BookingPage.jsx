@@ -7,6 +7,11 @@ import { ViewerTime } from '../lib/time/ViewerTime.js';
 
 const DURATIONS = [15, 30, 45, 60];
 const DEFAULT_DURATION = 30;
+const GAMES = [
+  { value: 'poker', label: 'Poker', description: 'Heads-up, 1000 chips each, no real money.' },
+  { value: 'chess', label: 'Chess', description: 'Heads-up, free, one quick game before the meeting.' },
+];
+const DEFAULT_GAME = 'poker';
 
 /** Public page from a host's booking link. Slots render in the guest's own time zone. */
 export function BookingPage() {
@@ -15,6 +20,7 @@ export function BookingPage() {
   const host = useQuery(api.hosts.bySlug, { slug: params.slug });
   const book = useMutation(api.booking.book);
   const [durationMinutes, setDurationMinutes] = useState(DEFAULT_DURATION);
+  const [game, setGame] = useState(DEFAULT_GAME);
   const [weekStart, setWeekStart] = useState(() => ViewerTime.startOfWeek(new Date()));
   const [selectedSlot, setSelectedSlot] = useState(null);
   const [form, setForm] = useState({ name: '', email: '' });
@@ -39,6 +45,7 @@ export function BookingPage() {
       guestName: form.name,
       guestEmail: form.email,
       guestTimeZone: ViewerTime.timeZone(),
+      game,
     })
       .then((meetingId) => navigate(`/book/${params.slug}/done/${meetingId}`))
       .catch((reason) => {
@@ -63,18 +70,38 @@ export function BookingPage() {
           game of heads-up poker (1000 play chips, no real money) over a private peer-to-peer video call.
         </p>
 
-        <div className="mt-6 flex flex-wrap items-center gap-2">
-          <span className="label mb-0 mr-2">Length</span>
-          {DURATIONS.map((minutes) => (
-            <button
-              key={minutes}
-              type="button"
-              onClick={() => { setDurationMinutes(minutes); setSelectedSlot(null); }}
-              className={`rounded-lg border px-3 py-1.5 text-sm ${durationMinutes === minutes ? 'border-rose-400 bg-rose-500/20 text-white' : 'border-slate-600 text-slate-400 hover:text-white'}`}
-            >
-              {minutes === 60 ? '1 hour' : `${minutes} min`}
-            </button>
-          ))}
+        <div className="mt-6 grid gap-4 md:grid-cols-2">
+          <div>
+            <p className="label">Length</p>
+            <div className="flex flex-wrap gap-2">
+              {DURATIONS.map((minutes) => (
+                <button
+                  key={minutes}
+                  type="button"
+                  onClick={() => { setDurationMinutes(minutes); setSelectedSlot(null); }}
+                  className={`rounded-lg border px-3 py-1.5 text-sm ${durationMinutes === minutes ? 'border-rose-400 bg-rose-500/20 text-white' : 'border-slate-600 text-slate-400 hover:text-white'}`}
+                >
+                  {minutes === 60 ? '1 hour' : `${minutes} min`}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="label">Game</p>
+            <div className="flex flex-col gap-2">
+              {GAMES.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setGame(option.value)}
+                  className={`rounded-lg border px-3 py-2 text-left text-sm transition ${game === option.value ? 'border-rose-400 bg-rose-500/20 text-white' : 'border-slate-600 text-slate-300 hover:text-white'}`}
+                >
+                  <div className="font-semibold">{option.label}</div>
+                  <div className="text-xs text-slate-400">{option.description}</div>
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       </section>
 

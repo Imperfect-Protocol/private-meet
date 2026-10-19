@@ -17,14 +17,15 @@ export function useMeetSession(meetingId, token, table) {
 
   useEffect(() => {
     if (seat === undefined) return undefined;
-    const next = new MeetSession({ meetingId, seat });
+    const kind = table?.game === 'chess' ? 'chess' : 'poker';
+    const next = new MeetSession({ meetingId, seat, kind });
     let cancelled = false;
     setError('');
     announcePeer({ token, ...next.announcement() })
       .then(() => { if (!cancelled) setSession(next); })
       .catch((reason) => { if (!cancelled) setError(reason.message); });
     return () => { cancelled = true; next.close(); };
-  }, [meetingId, token, seat, announcePeer]);
+  }, [meetingId, token, seat, table?.game, announcePeer]);
 
   useEffect(() => {
     if (session && peerAddress && publicKey) session.setPeer({ peerAddress, publicKey });
