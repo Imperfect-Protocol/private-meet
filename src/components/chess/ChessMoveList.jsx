@@ -8,7 +8,7 @@ export function ChessMoveList(props) {
         <li key={index} className="grid grid-cols-[2.5rem_1fr_1fr]">
           <span className="text-slate-500">{index + 1}.</span>
           {pair.map((move, side) => (
-            <span key={side}>{move.from}–{move.to}{move.promotion ? `=${move.promotion}` : ''}</span>
+            <span key={side}>{move.san}</span>
           ))}
         </li>
       ))}

@@ -397,6 +397,40 @@ export const legalMoves = (color: Color) => (history: History): Move[] => {
   });
 };
 
+const algebraicFiles = 'abcdefgh';
+const algebraicSquare = (square: Square): string => `${algebraicFiles[square[1]]}${8 - square[0]}`;
+
+/** Standard Algebraic Notation for a legal move in its position. */
+export const san = (move: Move) => (color: Color) => (history: History): string => {
+  const board = recent(history);
+  const piece = board[move.from[0]][move.from[1]]?.[1];
+  if (!piece) return algebraicSquare(move.to);
+
+  const castling = piece === King && move.from[0] === move.to[0] && Math.abs(move.to[1] - move.from[1]) === 2;
+  const capture = board[move.to[0]][move.to[1]] !== null || (piece === Pawn && move.from[1] !== move.to[1]);
+  const alternatives = legalMoves(color)(history).filter((candidate) =>
+    candidate.from[0] !== move.from[0] || candidate.from[1] !== move.from[1])
+    .filter((candidate) => candidate.to[0] === move.to[0] && candidate.to[1] === move.to[1])
+    .filter((candidate) => board[candidate.from[0]][candidate.from[1]]?.[1] === piece);
+  const sameFile = alternatives.some((candidate) => candidate.from[1] === move.from[1]);
+  const sameRank = alternatives.some((candidate) => candidate.from[0] === move.from[0]);
+  const disambiguation = alternatives.length === 0 ? ''
+    : !sameFile ? algebraicFiles[move.from[1]]
+      : !sameRank ? String(8 - move.from[0])
+        : algebraicSquare(move.from);
+  const result = makeMove(move.from[0], move.from[1])(move.to[0], move.to[1], move.promotion)(color)(history);
+  const suffix = isInvalid(result) ? ''
+    : outcome(oppositeColor(color))([...history, result]) === CheckMate ? '#'
+      : outcome(oppositeColor(color))([...history, result]) === Check ? '+'
+        : '';
+  if (castling) return `${move.to[1] > move.from[1] ? 'O-O' : 'O-O-O'}${suffix}`;
+  const destination = algebraicSquare(move.to);
+  const promotion = move.promotion ? `=${move.promotion.code}` : '';
+  return piece === Pawn
+    ? `${capture ? `${algebraicFiles[move.from[1]]}x` : ''}${destination}${promotion}${suffix}`
+    : `${piece.code}${disambiguation}${capture ? 'x' : ''}${destination}${promotion}${suffix}`;
+};
+
 /** Neither player can ever checkmate: Kings alone, with one Knight or Bishop, or with Bishops on squares of one color */
 export const isInsufficientMaterial = (board: Board): boolean => {
   const others = squares.filter((pos) => board[pos[0]][pos[1]] !== null && board[pos[0]][pos[1]]?.[1] !== King);

@@ -3,13 +3,13 @@
 - Date: 2026-10-10
 - POC: Sadhbh
 - Status: First implementation complete; browser testing belongs to Sadhbh.
-- TL;DR: A new Vite app in `private-meet/` uses Convex for accounts and booking, and `privatepoker-p2p` for heads-up poker, video, audio and chat. Unit tests, backend typecheck and production build pass. GitHub OAuth and real Resend delivery need deployment credentials.
+- TL;DR: A Vite app in `private-meet/` uses Convex for accounts and booking, with peer-to-peer video, audio, chat and a booking-selected heads-up game: Poker or Chess. Poker uses `privatepoker-p2p`; both games use the connected peer data channel. GitHub OAuth and real Resend delivery need deployment credentials.
 
 ## Scope
 
 Private Meet is separate from the existing poker frontends. It has no blockchain, wallet, subscription, lobby, table creation, buy-in or cash settlement screens.
 
-Each game starts with 1000 play chips per player. Blinds are 10/20. When a player runs out, both participants can agree to play again; otherwise their call stays open.
+Poker starts with 1000 play chips per player and 10/20 blinds. When a Poker player runs out, both participants can agree to play again; otherwise their call stays open. Chess is standard two-player Chess, with no chips or stakes; players can request a new game after it ends.
 
 ## Implemented flows
 
@@ -20,6 +20,7 @@ Each game starts with 1000 play chips per player. Blinds are 10/20. When a playe
 | Meeting popup | Subject, date, time, duration, guest name/email, both invitation states and a personal table link opening in another tab. |
 | Availability | Settings for available weekdays, daily hours and the time zone defining those hours. Defaults to weekdays 09:00–17:00. |
 | Public booking | A guest with no account opens `/book/:slug`, sees slots in their own browser time zone, chooses 15/30/45/60 minutes and supplies a name/email. Default duration is 30 minutes. |
+| Game selection | The guest chooses Poker or Chess while booking; the confirmed meeting carries that choice to both table links. |
 | Invitations | Both participants get individual Accept/Decline links and `.ics` files. Responses are stored in Convex. Both acceptances confirm the meeting; a decline releases the booking interval. |
 | Table connection | Personal table links select the participant's seat. Convex announces each tab's peer address and BLS public key; private-mesh bootstraps `privatepoker-p2p`. |
 | Media | After connection, a popup requests microphone permission and offers a video switch. Audio stays on. Videos render in round avatars; the local camera can be toggled. |
@@ -37,9 +38,10 @@ Duration is a scheduled interval, not a forced call cutoff.
 | Convex booking functions | Available UTC slots and transactional overlap checks |
 | Convex invitation/email functions | Pending/confirmed/declined state, Resend delivery and calendar attachments |
 | Convex meeting functions | Host calendar reads and participant-specific peer announcements |
-| `HeadsUpMatch` | Full replicated poker state, automatic shuffle/unmask steps, bets, showdown, payout and rematch |
+| `HeadsUpMatch` | Full replicated Poker state, automatic shuffle/unmask steps, bets, showdown, payout and rematch |
+| `ChessSession` | Full replicated Chess state, legal-move validation, terminal results and new-game agreement |
 | `MeetLink` | Signed transport through `privatepoker-p2p` |
-| `MeetSession` | Owns the link, game, media, chat and console |
+| `MeetSession` | Selects and owns the Poker or Chess session, link, media, chat and console |
 | `MediaSession` | Permission, capture, camera toggle and stream cleanup |
 | React hooks | Convex subscriptions and lifecycle wiring only |
 | `privatepoker-p2p` | Bootstrap, data channel, optional media tracks and whole-network disposal |
@@ -54,7 +56,7 @@ Availability is defined in the host's stored zone. Slot generation converts it t
 
 Each tab owns a random BLS transport key, independent of any wallet. It is announced through Convex and signs application messages. Each hand gets a separate fresh card-masking key for shuffle/unmask verification.
 
-Participant-specific invitation tokens select seat 0 (host) or seat 1 (guest). Tokens are bearer credentials and must remain private. A new tab for a participant replaces that seat's announcement. Reconnection starts a fresh match; in-progress games are not persisted.
+Participant-specific invitation tokens select seat 0 (host) or seat 1 (guest). Tokens are bearer credentials and must remain private. A new tab for a participant replaces that seat's announcement. Reconnection starts a fresh game; in-progress Poker and Chess games are not persisted.
 
 The mesh context uses lobby ID `private-meet` and the Convex meeting ID as the table ID. These are valid string identifiers for the existing relay.
 
@@ -67,7 +69,7 @@ The mesh context uses lobby ID `private-meet` and the Convex meeting ID as the t
 
 ## Verification
 
-- Private Meet: 10 passing unit tests for game synchronization, signed messages, rematch, fold payout, early-ready handling, scheduling/DST, invite state and chat counters.
+- Private Meet: unit tests cover Poker synchronization, signed messages, rematch, fold payout, Chess rules/session synchronization, early-ready handling, scheduling/DST, invite state and chat counters.
 - Networking package: 33 passing tests, including four mocked media-negotiation cases.
 - Backend TypeScript check passes.
 - Convex functions deployed successfully to an isolated anonymous local instance on ports 33210/33211.

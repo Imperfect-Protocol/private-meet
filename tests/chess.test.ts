@@ -27,6 +27,14 @@ function play(game: Chess.Game, from: string, to: string, promotion?: Chess.Piec
   return game.play(source[0], source[1])(target[0], target[1], promotion);
 }
 
+function san(game: Chess.Game, from: string, to: string, promotion?: Chess.Piece): string {
+  const source = squareAt(from) as Chess.Square;
+  const target = squareAt(to) as Chess.Square;
+  const notation = Chess.san({ from: source, to: target, ...(promotion ? { promotion } : {}) })(game.turn)(game.history);
+  assert.equal(game.play(source[0], source[1])(target[0], target[1], promotion), null);
+  return notation;
+}
+
 function playAll(game: Chess.Game, moves: string): void {
   for (const move of moves.split(' ')) assert.equal(play(game, move.slice(0, 2), move.slice(2, 4)), null, move);
 }
@@ -268,6 +276,28 @@ test('algebraic names map to the Scala coordinates', () => {
   assert.equal(promotionAt('constructor'), null);
 });
 
+test('standard algebraic notation covers moves, captures, checks, castling, promotions and ambiguity', () => {
+  const opening = new Chess.Game();
+  assert.equal(san(opening, 'e2', 'e4'), 'e4');
+  assert.equal(san(opening, 'd7', 'd5'), 'd5');
+  assert.equal(san(opening, 'e4', 'd5'), 'exd5');
+
+  const checked = new Chess.Game();
+  playAll(checked, 'e2e4 e7e5 d1h5');
+  assert.equal(san(checked, 'b8', 'c6'), 'Nc6');
+  assert.equal(san(checked, 'h5', 'e5'), 'Qxe5+');
+
+  const mate = new Chess.Game();
+  playAll(mate, 'f2f3 e7e5 g2g4');
+  assert.equal(san(mate, 'd8', 'h4'), 'Qh4#');
+
+  assert.equal(san(new Chess.Game(fenBoard('4k2r/8/8/8/8/8/8/4K2R')), 'e1', 'g1'), 'O-O');
+  assert.equal(san(new Chess.Game(fenBoard('4k3/8/8/8/8/8/8/R3K3')), 'e1', 'c1'), 'O-O-O');
+  assert.equal(san(new Chess.Game(fenBoard('7k/P7/8/8/8/8/8/K7')), 'a7', 'a8', Chess.Knight), 'a8=N');
+  assert.equal(san(new Chess.Game(fenBoard('4k3/8/8/8/8/8/8/1N2KN2')), 'b1', 'd2'), 'Nbd2');
+  assert.equal(san(new Chess.Game(fenBoard('4k3/8/8/8/8/1N6/8/1N2K3')), 'b1', 'd2'), 'N1d2');
+});
+
 /** Two chess seats wired through ordered queues that round-trip the wire codec. */
 function table() {
   const queues: unknown[][] = [[], []];
@@ -395,9 +425,12 @@ test('a new game starts only when both seats ask for it', () => {
   for (const session of pipe.seats) {
     assert.equal(session.phase, ChessPhase.Playing);
     assert.equal(session.matchNo, 2);
+    assert.equal(session.view().whiteSeat, 1, 'a rematch reverses the players’ colors');
     assert.equal(session.game.ply, 0);
     assert.equal(session.result, null);
   }
+  assert.equal(pipe.seats[1].view().isMyTurn, true, 'Black from the first game opens the rematch as White');
+  assert.equal(pipe.seats[0].view().isMyTurn, false);
 });
 
 test('the promotion choice travels with the move', () => {
@@ -407,7 +440,7 @@ test('the promotion choice travels with the move', () => {
   pipe.flush();
   for (const session of pipe.seats) {
     assert.equal(session.game.recent[0][0]?.[1], Chess.Knight);
-    assert.deepEqual(session.history, [{ by: 0, from: 'a7', to: 'a8', promotion: 'N' }]);
+    assert.deepEqual(session.history, [{ by: 0, from: 'a7', to: 'a8', promotion: 'N', san: 'a8=N' }]);
   }
 });
 

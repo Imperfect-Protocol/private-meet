@@ -11,11 +11,11 @@ Calendly provides free one-to-one scheduling, with paid host features. [21, line
 
 Private Meet's potential advantage is combining the booking and social-game flow. This is a hypothesis about reduced friction and a better conversation, not proof of uniqueness or demand. Existing free tools already make price-only positioning difficult.
 
-The local [README](../../README.md) and [GTM draft](../GTM.md) define Private Meet as play-chip social meetings. It has no wallet, cash buy-in, blockchain transaction, or cash payout in this scope. Keep its positioning separate from Private Poker's gambling/settlement proposition.
+The local [README](../../README.md) and [GTM draft](../GTM.md) define Private Meet as social meetings with a shared Poker or Chess game. Poker uses play chips; Chess has no chips or stakes. It has no wallet, cash buy-in, blockchain transaction, or cash payout in this scope. Keep its positioning separate from Private Poker's gambling/settlement proposition.
 
 ## Positioning to test
 
-> Book a one-to-one conversation and meet at a friendly poker table. Play chips only; keep talking when the game ends.
+> Book a one-to-one conversation and meet over a friendly game of Poker or Chess. Poker uses play chips only; keep talking when the game ends.
 
 Supporting architecture description:
 
@@ -29,10 +29,10 @@ Do not promise that every network will connect, that the app has been audited, o
 
 | Candidate audience | Reason to test | Main risk | Validation task |
 | --- | --- | --- | --- |
-| Crypto/technical founders and community introductions | May already understand poker and the privacy/fairness story. | Affinity does not establish willingness to book or return. | Interview hosts, then track accepted invitations and completed conversations. |
+| Crypto/technical founders and community introductions | May already understand Poker's privacy/fairness story; Chess gives hosts and guests another familiar shared-game choice. | Affinity does not establish willingness to book or return. | Interview hosts, then track accepted invitations, game selection and completed conversations. |
 | Poker creators, coaches, and their audiences | Already have a reason to share a poker activity. | Coaching may require hand review or other capabilities this version does not provide. | Observe a short introductory session and document missing requirements. |
 | Communities organizing member introductions | A shared activity may help a first conversation. | Hosts may need matching, moderation, or multi-user administration outside current scope. | Run a small organizer-led pilot without implying Donut feature parity. |
-| General professional scheduling | Larger theoretical audience. | Many guests do not want poker; reliability and calendar tools may matter more. | Test booking copy and a clear “just chat” option before pursuing this segment. |
+| General professional scheduling | Larger theoretical audience. | A shared game may still not suit many guests; reliability and calendar tools may matter more. | Test the Poker/Chess choice, booking copy and a clear “just chat” option before pursuing this segment. |
 
 These are research proposals. No customer interviews, demand survey, or pilot was performed in this investigation.
 
@@ -72,7 +72,7 @@ State retention/deletion rules and analytics practices. Add abuse controls and e
 
 ## Priority 3: make the activity understandable
 
-Use play-chip language before the guest joins. Explain that poker is a shared activity, not a financial wager. Let the guest find “just chat” without playing to a stack bust. Test beginner hints and pacing rather than assuming poker expertise.
+Present the game choice before the guest joins. Explain that Poker is a play-chip shared activity, not a financial wager, and that Chess has no chips or stakes. Let the guest find “just chat” without playing Poker to a stack bust. Test beginner hints, Chess/Poker choice and pacing rather than assuming either game's expertise.
 
 The strongest competitor challenge is the ease of sending an existing meeting link or Poker Now room. Compare the number of guest steps, the clarity of invitations, and completed conversations. Do not claim the combined flow reduces friction until users demonstrate it.
 
@@ -97,7 +97,7 @@ Use host-seat prices as comparison points, not a recommended price. A paid activ
 | “Peer-to-peer” | Verified topology for the actual media/game path and a clear TURN explanation. |
 | “Reliable calls” | Real media and restrictive-network testing, monitored failures, and a recovery path. |
 | “Calendar conflict prevention” | Clarify internal booking checks versus provider-calendar busy checks. |
-| “Fair poker” | Precise protocol properties, verification behavior, disclosure policy, and adversarial tests. |
+| “Fair poker” | Precise Poker protocol properties, verification behavior, disclosure policy, and adversarial tests. |
 
 ## Remaining external evidence
 

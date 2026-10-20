@@ -1,4 +1,4 @@
-import { Check, CheckMate, Game, Pawn, White, isGameOver, kingSquare, type InvalidMove, type Outcome, type Piece, type Square } from './Chess';
+import { Check, CheckMate, Game, Pawn, White, isGameOver, kingSquare, san, type InvalidMove, type Outcome, type Piece, type Square } from './Chess';
 import { boardLetters, promotionAt, squareAt, squareName } from './Notation';
 
 /** Lifecycle of chess at a meeting table. Initial: Idle. Final: Closed. Error: Failed. */
@@ -31,6 +31,8 @@ export interface ChessMove {
 /** A played move and the seat that played it. */
 export interface PlayedMove extends ChessMove {
   readonly by: Seat;
+  /** Standard Algebraic Notation, derived from the position before this move. */
+  readonly san: string;
 }
 
 /** How a game ended. A draw has no winner. */
@@ -44,6 +46,8 @@ export interface ChessView {
   readonly phase: ChessPhase;
   readonly matchNo: number;
   readonly seat: Seat;
+  /** Seat playing White in this game. The initial game gives White to the host. */
+  readonly whiteSeat: Seat;
   readonly turn: Seat;
   readonly isMyTurn: boolean;
   /** FEN letters by rank, rank 8 first; null for vacant squares. */
@@ -104,12 +108,14 @@ const noRematch = (): Rematch => ({ local: false, remote: false });
 /**
  * Chess between the two seats of a meeting. The meeting link signs and verifies every message;
  * this session keeps the two Game replicas in step. A move counts only when it is the sender's
- * turn, at the expected ply, and legal. The host (seat 0) plays White.
+ * turn, at the expected ply, and legal. The host (seat 0) plays White in the
+ * initial game; agreed rematches swap the colors.
  */
 export class ChessSession {
   readonly seat: Seat;
   phase: ChessPhase = ChessPhase.Idle;
   matchNo = 0;
+  private whiteSeat: Seat = 0;
   game = new Game();
   history: PlayedMove[] = [];
   result: ChessResult | null = null;
@@ -127,9 +133,9 @@ export class ChessSession {
     this.log = options.log ?? (() => {});
   }
 
-  /** Seat whose turn it is: White is seat 0. */
+  /** Seat whose turn it is, according to the color assigned for this game. */
   turnSeat(): Seat {
-    return this.game.turn === White ? 0 : 1;
+    return this.game.turn === White ? this.whiteSeat : otherSeat(this.whiteSeat);
   }
 
   isMyTurn(): boolean {
@@ -162,13 +168,15 @@ export class ChessSession {
     if (!this.isMyTurn()) return false;
     const ply = this.game.ply;
     const resolved = this.resolve(move);
-    if (!resolved || this.play(resolved) !== null) return false;
+    if (!resolved) return false;
+    const notation = san(resolved)(this.game.turn)(this.game.history);
+    if (this.play(resolved) !== null) return false;
     if (!this.send({ kind: Message.Move, match: this.matchNo, ply, ...resolved.notation })) {
       this.game.undo();
       this.log('Move not sent: the other player is not connected');
       return false;
     }
-    this.record(this.seat, resolved.notation);
+    this.record(this.seat, { ...resolved.notation, san: notation });
     return true;
   }
 
@@ -205,6 +213,7 @@ export class ChessSession {
       phase: this.phase,
       matchNo: this.matchNo,
       seat: this.seat,
+      whiteSeat: this.whiteSeat,
       turn: this.turnSeat(),
       isMyTurn: myTurn,
       board: boardLetters(this.game.recent),
@@ -245,12 +254,13 @@ export class ChessSession {
       return;
     }
     const resolved = this.resolve(fields);
+    const notation = resolved ? san(resolved)(this.game.turn)(this.game.history) : null;
     const error = resolved ? this.play(resolved) : 'unreadable';
     if (resolved === null || error !== null) {
       this.fail(`the other player sent an invalid move (${error})`);
       return;
     }
-    this.record(otherSeat(this.seat), resolved.notation);
+    this.record(otherSeat(this.seat), { ...resolved.notation, san: notation as string });
   }
 
   private receiveResign(fields: Fields): void {
@@ -294,14 +304,25 @@ export class ChessSession {
     this.transition(this.result ? ChessPhase.Ended : ChessPhase.Playing);
   }
 
+  /** Start an initial/recovery game without changing the original color assignment. */
   private start(match: number): void {
+    this.begin(match, this.whiteSeat);
+  }
+
+  /** Each agreed rematch reverses the players' colors. */
+  private startRematch(match: number): void {
+    this.begin(match, otherSeat(this.whiteSeat));
+  }
+
+  private begin(match: number, whiteSeat: Seat): void {
     this.matchNo = match;
+    this.whiteSeat = whiteSeat;
     this.game = new Game();
     this.history = [];
     this.result = null;
     this.error = null;
     this.rematch = noRematch();
-    this.log(`Chess game ${match} started; you play ${this.seat === 0 ? 'White' : 'Black'}`);
+    this.log(`Chess game ${match} started; you play ${this.seat === this.whiteSeat ? 'White' : 'Black'}`);
     this.transition(ChessPhase.Playing);
   }
 
@@ -310,7 +331,7 @@ export class ChessSession {
   }
 
   private startIfAgreed(): void {
-    if (this.rematch.local && this.rematch.remote) this.start(this.matchNo + 1);
+    if (this.rematch.local && this.rematch.remote) this.startRematch(this.matchNo + 1);
     else this.onChange();
   }
 
@@ -330,7 +351,7 @@ export class ChessSession {
     return this.game.play(move.from[0], move.from[1])(move.to[0], move.to[1], move.promotion);
   }
 
-  private record(by: Seat, move: ChessMove): void {
+  private record(by: Seat, move: ChessMove & { readonly san: string }): void {
     this.history = [...this.history, { ...move, by }];
     this.log(`${by === this.seat ? 'You' : 'They'} played ${move.from}–${move.to}${move.promotion ? `=${move.promotion}` : ''}`);
     const outcome = this.game.lastOutcome;
