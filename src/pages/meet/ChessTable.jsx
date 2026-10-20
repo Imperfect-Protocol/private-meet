@@ -66,13 +66,13 @@ export function ChessTable(props) {
       <div className="flex justify-center gap-8 lg:col-start-2">
         <ChessPlayer
           name={props.names[theirSeat]}
-          white={theirSeat === 0}
+          white={theirSeat === game.whiteSeat}
           stream={props.media.remoteStream}
           active={game.phase === ChessPhase.Playing && game.turn === theirSeat}
         />
         <ChessPlayer
           name={props.names[mySeat]}
-          white={mySeat === 0}
+          white={mySeat === game.whiteSeat}
           stream={props.media.localStream}
           isMe
           active={game.isMyTurn}
@@ -84,7 +84,7 @@ export function ChessTable(props) {
       <div className="lg:col-start-1 lg:row-span-2 lg:row-start-1">
         <ChessBoard
           board={game.board}
-          flipped={mySeat === 1}
+          flipped={mySeat !== game.whiteSeat}
           enabled={game.isMyTurn}
           selected={from}
           targets={targets}
@@ -104,7 +104,7 @@ export function ChessTable(props) {
       </aside>
 
       {promotion && game.isMyTurn ? (
-        <PromotionPicker white={mySeat === 0} onChoose={promote} onCancel={() => setPromotion(null)} />
+        <PromotionPicker white={mySeat === game.whiteSeat} onChoose={promote} onCancel={() => setPromotion(null)} />
       ) : null}
     </section>
   );
