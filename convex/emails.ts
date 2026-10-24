@@ -4,6 +4,7 @@ import type { Id } from "./_generated/dataModel";
 import { internalAction, internalMutation, internalQuery } from "./_generated/server";
 import { sendEmail } from "./model/resend";
 import { MINUTE_MS } from "./model/zonedTime";
+import { otherAttendeeEmail } from "./model/inviteEmail";
 
 type InviteEmail = {
   inviteId: Id<"invites">;
@@ -92,7 +93,7 @@ export const inviteData = internalQuery({
         token: invite.token,
         timeZone: invite.role === "host" ? host.timeZone : meeting.guestTimeZone,
         otherName: invite.role === "host" ? meeting.guestName : host.displayName,
-        otherEmail: invites.filter((other) => other.email != invite.email)[0].email,
+        otherEmail: otherAttendeeEmail(invite.role, host.email, meeting.guestEmail),
       }));
     return { meeting, emails };
   },

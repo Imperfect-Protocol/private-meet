@@ -8,9 +8,9 @@
 
 ## About
 
-Book a meeting, then talk over a two-player game of Texas Hold'em. The app lives in this directory; it has no wallets, subscriptions, blockchain transactions, buy-ins or cash payouts.
+Book a meeting, then talk over a two-player game of Poker or Chess. The guest chooses the game when booking. The app lives in this directory; it has no wallets, subscriptions, blockchain transactions, buy-ins or cash payouts.
 
-Convex stores accounts, availability, bookings, invite responses and peer announcements. Poker and chat travel through `../privatepoker-p2p` over WebRTC. Audio and video use the same peer connection. Each match starts with 1000 play chips per player, with blinds of 10/20.
+Convex stores accounts, availability, bookings, invite responses and peer announcements. Poker, Chess and chat travel over the participants' WebRTC connection; audio and video use that same connection. Poker matches start with 1000 play chips per player, with blinds of 10/20. Chess is a standard two-player game with no chips or stakes.
 
 ## Run locally
 
@@ -66,13 +66,13 @@ Without `AUTH_RESEND_KEY`, emails are logged by the backend for local developmen
 
 1. Sign in and see a seven-day calendar with 15-minute rows, week navigation and a date picker.
 2. Set your available days and hours under Settings. Availability follows that stored time zone; every screen displays times in the viewer's browser zone.
-3. Copy your booking link. A guest needs no account: they choose 15, 30, 45 or 60 minutes (30 by default), then enter their name and email.
+3. Copy your booking link. A guest needs no account: they choose Poker or Chess, select 15, 30, 45 or 60 minutes (30 by default), then enter their name and email.
 4. Convex checks availability and overlaps again while saving the booking. Both parties receive individual invite links and calendar attachments.
 5. Each person accepts or declines their invitation. Convex records the answers; the calendar updates when both accept.
-6. Open each person's own table link. Keep both tabs open while the private-mesh bootstrap establishes the WebRTC connection.
+6. Open each person's own table link. Keep both tabs open while the private-mesh bootstrap establishes the WebRTC connection. The booking's chosen game opens for both participants.
 7. After connection, choose whether to use video, press OK and allow microphone access. Audio is always on during the call; the camera can be toggled from your avatar.
 8. Use Chat for a separate message window, and Console for protocol/connection logs.
-9. When a stack reaches zero, both players can agree to start another match with 1000 chips each. “Just chat” leaves the call open.
+9. When a Poker stack reaches zero, both players can agree to start another match with 1000 chips each. After either game ends, the call remains open; “Just chat” leaves the call open without continuing Poker.
 
 The chosen duration is a booking interval, not a forced call-disconnection timer.
 
@@ -82,16 +82,17 @@ The chosen duration is a booking interval, not a forced call-disconnection timer
 | --- | --- |
 | `convex/` | Auth, host settings, transactional booking, invitations, emails, peer announcements |
 | `convex/model/` | Time-zone arithmetic, slot generation, email transport and invite status helpers |
-| `src/lib/meet/HeadsUpMatch.js` | Heads-up game lifecycle, automatic protocol actions, payout and rematch agreement |
+| `src/lib/meet/HeadsUpMatch.js` | Heads-up Poker lifecycle, automatic protocol actions, payout and rematch agreement |
+| `src/lib/chess/ChessSession.ts` | Replicated two-player Chess lifecycle, legal-move synchronization and new-game agreement |
 | `src/lib/meet/SessionIdentity.js` | Ephemeral BLS identities |
 | `src/lib/meet/MeetLink.js` | Signed peer messaging over the shared networking package |
-| `src/lib/meet/MeetSession.js` | Owns the match, link, media, chat and debug log |
+| `src/lib/meet/MeetSession.js` | Owns the selected game, link, media, chat and debug log |
 | `src/lib/meet/MediaSession.js` | Microphone/camera lifecycle |
 | `src/lib/crum_bls`, `crum_pkr`, `crum_net` | Browser engine source copied from `private-poker-vite` |
 | `src/hooks/` | React/Convex wiring only |
 | `src/pages`, `src/components` | Calendar, booking, invite and table UI |
 
-The per-tab transport key signs messages. A separate random key masks the cards for each hand, because the masking key’s public key and shuffle trace are revealed during hand verification. Each player keeps a full game replica. Convex receives neither hole cards nor bets.
+The per-tab transport key signs messages. Poker additionally uses a random key to mask cards for each hand; its public key and shuffle trace are revealed during hand verification. Each player keeps a full game replica. Convex receives neither Poker hole cards/bets nor Chess moves.
 
 The shared `privatepoker-p2p` package has optional `setLocalStream(stream)`, `MediaStream` events, and `close()` cleanup. Existing data-only consumers do not need to enable media.
 
@@ -106,7 +107,7 @@ cd ../privatepoker-p2p
 node --test src/**/*.test.js
 ```
 
-Unit tests cover signed messages, a complete verified hand, all-in and rematch, fold payout, the early-ready handshake, slot overlap/duration/DST, invite status and chat counters. Networking tests include mocked media negotiation and simultaneous-offer handling.
+Unit tests cover signed messages, a complete verified Poker hand, all-in and rematch, fold payout, Chess rules and session synchronization, the early-ready handshake, slot overlap/duration/DST, invite status and chat counters. Networking tests include mocked media negotiation and simultaneous-offer handling.
 
 Browser layout, real camera/microphone playback, GitHub redirects, email delivery and two-device gameplay are intentionally left for manual testing. Passing these unit tests does not verify those flows.
 

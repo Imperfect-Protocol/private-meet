@@ -2,8 +2,11 @@ import { useMemo, useState } from 'react';
 import { useMutation, useQuery } from 'convex/react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '../../convex/_generated/api';
-import { Brand, Splash } from '../components/Splash.jsx';
+import { Splash } from '../components/Splash.jsx';
+import { GAMES, GameKind } from '../lib/meet/games.js';
 import { ViewerTime } from '../lib/time/ViewerTime.js';
+import { SiteNav } from '../components/SiteNav.jsx';
+import { DemoDisclaimerFooter } from '../components/DemoDisclaimerFooter.jsx'
 
 const DURATIONS = [15, 30, 45, 60];
 const DEFAULT_DURATION = 30;
@@ -15,6 +18,7 @@ export function BookingPage() {
   const host = useQuery(api.hosts.bySlug, { slug: params.slug });
   const book = useMutation(api.booking.book);
   const [durationMinutes, setDurationMinutes] = useState(DEFAULT_DURATION);
+  const [game, setGame] = useState(GameKind.Chess);
   const [weekStart, setWeekStart] = useState(() => ViewerTime.startOfWeek(new Date()));
   const [selectedSlot, setSelectedSlot] = useState(null);
   const [form, setForm] = useState({ name: '', email: '' });
@@ -39,6 +43,7 @@ export function BookingPage() {
       guestName: form.name,
       guestEmail: form.email,
       guestTimeZone: ViewerTime.timeZone(),
+      game,
     })
       .then((meetingId) => navigate(`/book/${params.slug}/done/${meetingId}`))
       .catch((reason) => {
@@ -50,8 +55,8 @@ export function BookingPage() {
 
   return (
     <main className="mx-auto flex min-h-screen max-w-5xl flex-col gap-6 p-4 md:p-8">
+      <SiteNav/>
       <header className="flex flex-wrap items-center gap-3">
-        <Brand />
         <span className="ml-auto rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-400">🌐 {ViewerTime.zoneLabel()}</span>
       </header>
 
@@ -59,22 +64,33 @@ export function BookingPage() {
         <p className="text-sm uppercase tracking-widest text-rose-300">Book a Private Meet</p>
         <h1 className="mt-1 text-3xl font-black text-white">Meet {host.displayName}</h1>
         <p className="mt-2 max-w-2xl text-sm text-slate-400">
-          Pick a time that suits you. You will both get an email invite. At meeting time, open the link and play a friendly
-          game of heads-up poker (1000 play chips, no real money) over a private peer-to-peer video call.
+          Pick a game and a time that suits you. You will both get an email invite. At meeting time, open the link and play a
+          friendly game of poker or chess over a private peer-to-peer video call.
         </p>
 
-        <div className="mt-6 flex flex-wrap items-center gap-2">
-          <span className="label mb-0 mr-2">Length</span>
-          {DURATIONS.map((minutes) => (
-            <button
-              key={minutes}
-              type="button"
-              onClick={() => { setDurationMinutes(minutes); setSelectedSlot(null); }}
-              className={`rounded-lg border px-3 py-1.5 text-sm ${durationMinutes === minutes ? 'border-rose-400 bg-rose-500/20 text-white' : 'border-slate-600 text-slate-400 hover:text-white'}`}
-            >
-              {minutes === 60 ? '1 hour' : `${minutes} min`}
-            </button>
-          ))}
+        <div className="mt-6 grid gap-4 md:grid-cols-2">
+          <div>
+            <p className="label">Length</p>
+            <div className="flex flex-wrap gap-2">
+              {DURATIONS.map((minutes) => (
+                <button
+                  key={minutes}
+                  type="button"
+                  onClick={() => { setDurationMinutes(minutes); setSelectedSlot(null); }}
+                  className={`rounded-lg border px-3 py-1.5 text-sm ${durationMinutes === minutes ? 'border-rose-400 bg-rose-500/20 text-white' : 'border-slate-600 text-slate-400 hover:text-white'}`}
+                >
+                  {minutes === 60 ? '1 hour' : `${minutes} min`}
+                </button>
+              ))}
+            </div>
+          </div>
+          <label className="block">
+            <span className="label">Game</span>
+            <select className="field" required value={game} onChange={(event) => setGame(event.target.value)}>
+              {GAMES.map((option) => <option key={option.kind} value={option.kind}>{option.label}</option>)}
+            </select>
+            <span className="mt-1 block text-xs text-slate-400">{GAMES.find((option) => option.kind === game).description}</span>
+          </label>
         </div>
       </section>
 
@@ -128,6 +144,7 @@ export function BookingPage() {
         </form>
       ) : null}
       {error ? <p className="rounded-lg bg-rose-500/10 p-3 text-sm text-rose-300">{error}</p> : null}
+      <DemoDisclaimerFooter/>
     </main>
   );
 }
