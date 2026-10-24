@@ -43,3 +43,123 @@ body {
 .hatched {
   background-image: repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0 6px, transparent 6px 12px);
 }
+
+.demo-disclaimer-footer {
+  width: min(1120px, calc(100% - 40px));
+  flex-shrink: 0;
+  margin: auto auto 0;
+  padding: 20px 0 28px;
+}
+
+.demo-disclaimer-footer p {
+  margin: 0;
+  color: rgba(246, 203, 153, 0.58);
+  font-size: 0.72rem;
+  line-height: 1.55;
+  text-align: center;
+}
+
+.demo-disclaimer-footer a:link {
+  color: rgba(246, 221, 153, 0.85);
+}
+
+.demo-disclaimer-footer a:visited {
+  color: rgba(246, 207, 153, 0.85);
+}
+
+.demo-disclaimer-footer a:hover {
+  color: rgba(246, 193, 153, 0.85);
+}
+
+.demo-disclaimer-footer a:active {
+  color: rgba(246, 229, 153, 0.85);
+}
+
+.site-nav {
+  width: min(100% - 40px, 1240px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin: 0 auto;
+  padding: 28px 0 18px;
+  position: relative;
+  z-index: 10;
+}
+
+.site-nav__links a,
+.site-nav__links i {
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  font-size: clamp(0.72rem, 1.6vw, 0.82rem);
+  font-weight: 950;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.site-nav__brand {
+  display: inline-flex;
+  align-items: center;
+  color: #f8fafc;
+  text-decoration: none;
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.site-nav__wordmark {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.site-nav__title {
+  color: #f8fafc;
+  font-size: clamp(1.35rem, 3vw, 2rem);
+  font-weight: 950;
+  letter-spacing: 0;
+  line-height: 0.86;
+  text-transform: uppercase;
+  text-shadow: 0 0 22px rgba(244, 63, 94, 0.4);
+}
+
+.site-nav__subtitle {
+  padding-top: 5px;
+  border-top: 1px solid rgba(244, 63, 94, 0.46);
+  color: rgba(248, 250, 252, 0.78);
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  font-size: clamp(0.52rem, 1.25vw, 0.64rem);
+  font-weight: 900;
+  letter-spacing: 0.22em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.site-nav__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.site-nav__links span {
+  display: inline-flex;
+  gap: 10px;
+}
+
+.site-nav__links a {
+  color: #e2e8f0;
+  text-decoration: none;
+}
+
+.site-nav__links a:hover,
+.site-nav__brand:hover {
+  color: #fb7185;
+}
+
+.site-nav__brand:hover {
+  opacity: 0.88;
+  transform: translateY(-1px);
+}
+
+.site-nav__links i {
+  color: rgba(244, 63, 94, 0.52);
+  font-style: normal;
+}

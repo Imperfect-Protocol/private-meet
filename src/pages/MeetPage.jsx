@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery } from 'convex/react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../../convex/_generated/api';
-import { Brand, Splash } from '../components/Splash.jsx';
+import { Splash } from '../components/Splash.jsx';
 import { ChatWindow } from '../components/table/ChatWindow.jsx';
 import { DebugConsole } from '../components/table/DebugConsole.jsx';
 import { MediaPrompt } from '../components/table/MediaPrompt.jsx';
@@ -40,7 +40,6 @@ function MeetingRoom(props) {
   return (
     <main className="flex min-h-screen flex-col gap-4 p-4 md:p-6">
       <header className="flex flex-wrap items-center gap-3">
-        <Brand />
         <h1 className="text-sm text-slate-300">{props.table.title}</h1>
         <span className="rounded-full border border-slate-700 px-2 py-0.5 text-xs text-slate-300">{gameLabel(view.kind)}</span>
         <span className={`text-xs ${connected ? 'text-emerald-300' : 'text-amber-300'}`}>{view.linkState}</span>

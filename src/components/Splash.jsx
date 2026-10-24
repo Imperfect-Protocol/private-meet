@@ -5,12 +5,3 @@ export function Splash({ label }) {
     </main>
   );
 }
-
-export function Brand() {
-  return (
-    <span className="flex items-center gap-2 font-black tracking-tight text-white">
-      <span className="grid h-8 w-8 place-items-center rounded-lg bg-gradient-to-br from-rose-500 to-amber-400 text-sm text-slate-950">♠</span>
-      Private Meet
-    </span>
-  );
-}

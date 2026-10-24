@@ -2,9 +2,11 @@ import { useMemo, useState } from 'react';
 import { useMutation, useQuery } from 'convex/react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '../../convex/_generated/api';
-import { Brand, Splash } from '../components/Splash.jsx';
+import { Splash } from '../components/Splash.jsx';
 import { GAMES, GameKind } from '../lib/meet/games.js';
 import { ViewerTime } from '../lib/time/ViewerTime.js';
+import { SiteNav } from '../components/SiteNav.jsx';
+import { DemoDisclaimerFooter } from '../components/DemoDisclaimerFooter.jsx'
 
 const DURATIONS = [15, 30, 45, 60];
 const DEFAULT_DURATION = 30;
@@ -16,7 +18,7 @@ export function BookingPage() {
   const host = useQuery(api.hosts.bySlug, { slug: params.slug });
   const book = useMutation(api.booking.book);
   const [durationMinutes, setDurationMinutes] = useState(DEFAULT_DURATION);
-  const [game, setGame] = useState(GameKind.Poker);
+  const [game, setGame] = useState(GameKind.Chess);
   const [weekStart, setWeekStart] = useState(() => ViewerTime.startOfWeek(new Date()));
   const [selectedSlot, setSelectedSlot] = useState(null);
   const [form, setForm] = useState({ name: '', email: '' });
@@ -53,8 +55,8 @@ export function BookingPage() {
 
   return (
     <main className="mx-auto flex min-h-screen max-w-5xl flex-col gap-6 p-4 md:p-8">
+      <SiteNav/>
       <header className="flex flex-wrap items-center gap-3">
-        <Brand />
         <span className="ml-auto rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-400">🌐 {ViewerTime.zoneLabel()}</span>
       </header>
 
@@ -142,6 +144,7 @@ export function BookingPage() {
         </form>
       ) : null}
       {error ? <p className="rounded-lg bg-rose-500/10 p-3 text-sm text-rose-300">{error}</p> : null}
+      <DemoDisclaimerFooter/>
     </main>
   );
 }

@@ -1,12 +1,13 @@
 import { Link, useParams } from 'react-router-dom';
-import { Brand } from '../components/Splash.jsx';
+import { SiteNav} from '../components/SiteNav.jsx';
+import { DemoDisclaimerFooter } from '../components/DemoDisclaimerFooter.jsx'
 
 export function BookingDonePage() {
   const params = useParams();
   return (
     <main className="grid min-h-screen place-items-center p-6">
+      <SiteNav/>
       <section className="panel max-w-md p-8 text-center">
-        <div className="flex justify-center"><Brand /></div>
         <p className="mt-6 text-5xl">📬</p>
         <h1 className="mt-4 text-2xl font-bold text-white">Invites are on their way</h1>
         <p className="mt-3 text-sm text-slate-400">
@@ -15,6 +16,7 @@ export function BookingDonePage() {
         </p>
         <Link className="btn-ghost mt-6" to={`/book/${params.slug}`}>Book another time</Link>
       </section>
+      <DemoDisclaimerFooter/>
     </main>
   );
 }
