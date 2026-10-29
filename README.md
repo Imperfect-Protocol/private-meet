@@ -1,11 +1,5 @@
 # Private Meet
 
-**Author:** [Sonia Code](https://github.com/sadhbh-c0d3)
-
-*Copyright (c) 2026 Sonia Kolasinska / Imperfect Protocol. All Rights Reserved.*
-
----
-
 ## About
 
 Book a meeting, then talk over a two-player game of Poker or Chess. The guest chooses the game when booking. The app lives in this directory; it has no wallets, subscriptions, blockchain transactions, buy-ins or cash payouts.
