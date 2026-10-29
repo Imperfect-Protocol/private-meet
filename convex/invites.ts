@@ -17,6 +17,7 @@ export const byToken = query({
       title: meeting.title,
       startsAt: meeting.startsAt,
       durationMinutes: meeting.durationMinutes,
+      game: meeting.game ?? "poker",
       status: meeting.status,
       hostName: host?.displayName ?? "Host",
       guestName: meeting.guestName,

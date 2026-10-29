@@ -3,7 +3,8 @@ import { useMutation } from 'convex/react';
 import { Link } from 'react-router-dom';
 import { api } from '../../convex/_generated/api';
 import { ACCESS_REQUEST_LIMITS, validateAccessRequest } from '../../convex/model/accessRequest';
-import { Brand } from '../components/Splash.jsx';
+import { SiteNav} from '../components/SiteNav.jsx';
+import { DemoDisclaimerFooter } from '../components/DemoDisclaimerFooter.jsx'
 
 export function RequestAccessPage() {
   const submitRequest = useMutation(api.accessRequests.submit);
@@ -29,8 +30,8 @@ export function RequestAccessPage() {
 
   return (
     <main className="grid min-h-screen place-items-center p-6">
+      <SiteNav/>
       <section className="panel w-full max-w-md p-8">
-        <Brand />
         <h1 className="mt-6 text-2xl font-bold text-white">Request an account</h1>
         <p className="mt-2 text-sm text-slate-400">You can create an account with GitHub from the sign-in page. For an account without GitHub, tell us who you are and why you’d like access.</p>
 
@@ -58,6 +59,7 @@ export function RequestAccessPage() {
         )}
         <Link className="btn-ghost mt-4 w-full" to="/sign-in">Back to Sign-in</Link>
       </section>
+      <DemoDisclaimerFooter/>
     </main>
   );
 }

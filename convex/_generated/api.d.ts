@@ -18,6 +18,7 @@ import type * as invites from "../invites.js";
 import type * as meetings from "../meetings.js";
 import type * as model_accessRequest from "../model/accessRequest.js";
 import type * as model_accountAccess from "../model/accountAccess.js";
+import type * as model_inviteEmail from "../model/inviteEmail.js";
 import type * as model_resend from "../model/resend.js";
 import type * as model_slots from "../model/slots.js";
 import type * as model_tokens from "../model/tokens.js";
@@ -41,6 +42,7 @@ declare const fullApi: ApiFromModules<{
   meetings: typeof meetings;
   "model/accessRequest": typeof model_accessRequest;
   "model/accountAccess": typeof model_accountAccess;
+  "model/inviteEmail": typeof model_inviteEmail;
   "model/resend": typeof model_resend;
   "model/slots": typeof model_slots;
   "model/tokens": typeof model_tokens;

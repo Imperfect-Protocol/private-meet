@@ -2,11 +2,12 @@ import { useMemo, useState } from 'react';
 import { useAuthActions } from '@convex-dev/auth/react';
 import { useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
-import { Brand } from '../components/Splash.jsx';
+import { SiteNav } from '../components/SiteNav.jsx';
 import { MeetingPopup } from '../components/calendar/MeetingPopup.jsx';
 import { SettingsDialog } from '../components/calendar/SettingsDialog.jsx';
 import { WeekGrid } from '../components/calendar/WeekGrid.jsx';
 import { ViewerTime } from '../lib/time/ViewerTime.js';
+import { DemoDisclaimerFooter } from '../components/DemoDisclaimerFooter.jsx'
 
 export function CalendarPage() {
   const authActions = useAuthActions();
@@ -40,8 +41,8 @@ export function CalendarPage() {
 
   return (
     <main className="flex h-screen flex-col gap-4 p-4 md:p-6">
+      <SiteNav/>
       <header className="flex flex-wrap items-center gap-3">
-        <Brand />
         <span className="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-400" title="Times are shown in your browser's time zone">
           🌐 {ViewerTime.zoneLabel()}
         </span>
@@ -74,6 +75,7 @@ export function CalendarPage() {
 
       {selectedMeeting ? <MeetingPopup meeting={selectedMeeting} onClose={() => setSelected(null)} /> : null}
       {showSettings && host ? <SettingsDialog host={host} onClose={() => setShowSettings(false)} /> : null}
+      <DemoDisclaimerFooter/>
     </main>
   );
 }

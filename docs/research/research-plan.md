@@ -2,7 +2,7 @@
 
 Date: 2026-10-10
 POC: Project owner
-TL;DR: Compare the products people would combine to replace Private Meet: scheduling, private calls, social introductions, and casual poker.
+TL;DR: Compare the products people would combine to replace Private Meet: scheduling, private calls, social introductions, and casual two-player games.
 
 ## Questions
 
@@ -27,7 +27,7 @@ Check Glasser's catalog and pricing without running paid endpoints. Use existing
 
 ## Local scope
 
-Private Meet currently combines booking links, two-person play-chip Texas Hold'em, peer-to-peer audio/video, and chat. Convex handles accounts and bookings; email and signalling also require services. No wallet, real-money payout, or blockchain transaction is part of this scope. TURN, calendar-provider synchronization, reconnect persistence, abuse controls, and real-device production verification remain gaps.
+Private Meet currently combines booking links, a guest-selected two-person game (Poker or Chess), peer-to-peer audio/video, and chat. Poker uses play chips; Chess has no chips or stakes. Convex handles accounts and bookings; email and signalling also require services. No wallet, real-money payout, or blockchain transaction is part of this scope. TURN, calendar-provider synchronization, reconnect persistence, abuse controls, and real-device production verification remain gaps.
 
 ## Completion
 
@@ -35,4 +35,4 @@ Completed on 2026-10-10. The linked index, competitor comparison, privacy/trust 
 
 ## Boundaries
 
-This is desk research, not a security audit or hands-on competitor test. A vendor's encryption statement is not evidence of independent security verification. Play chips and shared games should be compared separately from cash gambling.
+This is desk research, not a security audit or hands-on competitor test. A vendor's encryption statement is not evidence of independent security verification. Poker play chips and shared games should be compared separately from cash gambling.

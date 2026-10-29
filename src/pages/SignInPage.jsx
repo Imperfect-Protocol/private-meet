@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react';
 import { useAuthActions } from '@convex-dev/auth/react';
 import { useConvexAuth } from 'convex/react';
 import { Link, Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { Brand, Splash } from '../components/Splash.jsx';
+import { Splash } from '../components/Splash.jsx';
+import { SiteNav} from '../components/SiteNav.jsx';
+import { DemoDisclaimerFooter } from '../components/DemoDisclaimerFooter.jsx'
 
 const MODE = Object.freeze({ SignIn: 'signIn', Forgot: 'forgot', Reset: 'reset' });
 
@@ -89,10 +91,10 @@ export function SignInPage() {
 
   return (
     <main className="grid min-h-screen place-items-center p-6">
+      <SiteNav/>
       <section className="panel w-full max-w-sm p-8">
-        <Brand />
         <h1 className="mt-6 text-2xl font-bold text-white">{titles[mode]}</h1>
-        <p className="mt-1 text-sm text-slate-400">Meet over a private game of poker. Peer-to-peer video, no middleman.</p>
+        <p className="mt-1 text-sm text-slate-400">Meet over a private game of poker or chess. Peer-to-peer video, no middleman.</p>
 
         {mode === MODE.SignIn ? (
           <>
@@ -146,6 +148,7 @@ export function SignInPage() {
         {notice ? <p className="mt-4 rounded-lg bg-emerald-500/10 p-3 text-sm text-emerald-300">{notice}</p> : null}
         {error ? <p className="mt-4 rounded-lg bg-rose-500/10 p-3 text-sm text-rose-300">{error}</p> : null}
       </section>
+      <DemoDisclaimerFooter/>
     </main>
   );
 }

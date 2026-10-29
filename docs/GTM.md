@@ -6,7 +6,7 @@
 
 ## TL;DR
 
-Private Meet is **a booking link plus a heads-up poker table plus peer-to-peer video**. A host shares a link, the guest books 15–60 minutes, and at meeting time they talk while playing a friendly hand of Hold'em with play chips. The deck is cryptographically fair and the video goes browser to browser.
+Private Meet is **a booking link plus a heads-up Poker or Chess game plus peer-to-peer video**. A host shares a link, the guest selects Poker or Chess and books 15–60 minutes; at meeting time they talk while playing together. Poker uses play chips and its deck is cryptographically fair; Chess has no chips or stakes. Video goes browser to browser.
 
 - **Category we claim:** *social meetings*, meaning meetings people actually want to show up to. We are not a video conferencing product and we are not a gambling product.
 - **Beachhead:** crypto and tech founders, BD and devrel people, and investors who take a lot of intro and networking calls. They already like poker and privacy, and they are where the founder's network is (Arbitrum ecosystem).
@@ -41,19 +41,19 @@ Private Meet is **a booking link plus a heads-up poker table plus peer-to-peer v
 
 **For** people who take a lot of 1:1 intro, networking and coffee-chat calls,
 **who** are tired of awkward, forgettable 30-minute video calls,
-**Private Meet is** a booking link that turns the meeting into a friendly game of heads-up poker over private peer-to-peer video.
-**Unlike** Calendly + Zoom/Meet, **the conversation has something to do**: a shared, low-stakes game breaks the ice, shows how people think, and makes the meeting memorable. The video and the cards never pass through our servers.
+**Private Meet is** a booking link that turns the meeting into a friendly game of heads-up Poker or Chess over private peer-to-peer video.
+**Unlike** Calendly + Zoom/Meet, **the conversation has something to do**: a shared, low-stakes game breaks the ice, shows how people think, and makes the meeting memorable. The video and game traffic travel between participants; Poker cards never pass through our servers.
 
 ### Message pillars
 
-1. **Skip the small talk. Deal a hand.** Fun first. The game gives the call a rhythm and something to react to. (This is the lead message.)
+1. **Skip the small talk. Make a move.** Fun first. The game gives the call a rhythm and something to react to. Poker remains the lead technical story; Chess makes the activity more broadly approachable.
 2. **Private by construction.** Video goes browser to browser. No meeting bots, no recordings, no transcripts sitting in someone's cloud.
 3. **Provably fair.** The players' own browsers shuffle and deal. This is the 1979 "Mental Poker" problem, solved in the browser. It's a credibility and curiosity hook for technical audiences, not the headline for everyone else.
-4. **No money, no catch.** Play chips only. Nothing to buy, nothing to win.
+4. **No money, no catch.** Poker is play chips only; Chess has no chips or stakes. Nothing to buy, nothing to win.
 
 ### Taglines to test
-- "Meet over a hand of poker."
-- "Skip the small talk. Deal a hand."
+- "Meet over a game, not another video call."
+- "Skip the small talk. Make a move."
 - "The 15-minute meeting people actually show up for."
 - Technical audience: "Mental Poker, 1979 → your browser, 2026."
 
@@ -64,6 +64,7 @@ Private Meet is **a booking link plus a heads-up poker table plus peer-to-peer v
 | Calendly / Cal.com / SavvyCal | Scheduling | We include the meeting experience, not just the slot |
 | Zoom / Google Meet / Whereby | Video | P2P privacy plus a shared activity |
 | PokerNow, ClubGG, home-game apps | Poker with friends | We are 1:1, scheduled and video-first. Meeting comes first, game second |
+| Browser chess sites | Chess play | We are scheduled and video-first; Chess is a shared meeting activity, not a ladder or tournament product |
 | Donut / coffee-chat tools | Icebreakers inside orgs | Works across companies, with an actual activity |
 | Houseparty-style social video (cautionary) | Novelty | Tie usage to a recurring **job** (intro calls) so we don't depend on novelty, which is what killed Houseparty |
 
@@ -71,7 +72,7 @@ Private Meet is **a booking link plus a heads-up poker table plus peer-to-peer v
 
 ## 3. Target segments
 
-Score: pain × poker affinity × reachable by founder × viral surface (number of guests they expose).
+Score: pain × shared-game affinity × reachable by founder × viral surface (number of guests they expose).
 
 | # | Segment | Why | Priority |
 |---|---|---|---|
@@ -101,7 +102,7 @@ Product work this loop needs (small, high leverage):
 2. **Shareable recap card:** an image of the winning hand to post to X or Farcaster. Shows hand categories only, never hole cards unless the player opts in.
 3. **"Booked with Private Meet" footer** on the free tier booking page and in invite emails.
 4. **Head-to-head record** between the same two people ("You lead Alex 3–2"). Gives people a reason to rematch and re-book.
-5. **Poker-optional on-ramp:** a one-line hand-strength hint and "how to play" overlay, so guests who don't play poker still enjoy the call. This matters because any guest can churn out of the loop.
+5. **Game-choice on-ramp:** clear Poker/Chess selection at booking, a one-line Poker hand-strength hint and an optional "how to play" overlay. This matters because any guest can churn out of the loop.
 
 ### 4.2 Acquisition channels (in order)
 
@@ -148,12 +149,12 @@ Gate: **nothing public until these are done.**
 - [ ] Guest post-match screen + "Create your own link" CTA
 - [ ] Privacy-respecting product analytics on bookings, connects and hands played. Counts only, never cards, chat or media
 - [ ] Landing page with honest architecture section ("what touches our servers, what doesn't")
-- [ ] Terms/privacy page stating play-money only, no prizes, 18+ (conservative default for poker content)
+- [ ] Terms/privacy page stating Poker is play-money only, no prizes, 18+ (conservative default for poker content)
 
 ### Phase 1: Private alpha (weeks 4–8)
 - 30 hand-picked hosts from segment A, each asked to put the link in their bio or email signature for 2 weeks.
 - Weekly 15-min feedback call, held *on Private Meet*.
-- Exit criteria: ≥ 60% of hosts have ≥ 3 completed meetings; ≥ 5% guest→host conversion; ≥ 95% connect rate; qualitative "guests mentioned the poker" signal.
+- Exit criteria: ≥ 60% of hosts have ≥ 3 completed meetings; ≥ 5% guest→host conversion; ≥ 95% connect rate; qualitative signal that guests understood and enjoyed the Poker/Chess choice.
 
 ### Phase 2: Public beta (weeks 8–14)
 - Show HN (technical story) → Product Hunt about 2 weeks later (fun story).
